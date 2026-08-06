@@ -63,6 +63,16 @@ def image_compress():
     return render_template('image_compress.html')
 
 
+@app.route('/passport-photo.html')
+def passport_photo():
+    return render_template('passport_photo.html')
+
+
+@app.route('/image-resizer.html')
+def image_resizer():
+    return render_template('image_resizer.html')
+
+
 @app.route('/convert', methods=['POST'])
 def convert():
     files = request.files.getlist('images[]')
