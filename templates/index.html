@@ -1,1 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF ART — Merge Photos into a PDF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1;
+    --paper-deep: #E3DFD3;
+    --card: #FFFFFF;
+    --ink: #23283A;
+    --ink-soft: #6B6F81;
+    --accent: #8C2F39;
+    --accent-dark: #6E2029;
+    --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 20px 24px;
+  }
+  nav.toolnav {
+    display: flex; gap: 6px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px; margin-bottom: 28px;
+    box-shadow: 0 4px 14px rgba(35,40,58,0.08);
+  }
+  nav.toolnav a {
+    text-decoration: none; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 999px; color: var(--ink-soft);
+    transition: background .15s, color .15s;
+  }
+  nav.toolnav a.active { background: var(--accent); color: #fff; }
+  nav.toolnav a:not(.active):hover { background: var(--paper-deep); color: var(--ink); }
 
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px;
+  }
+  h1.logo {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px;
+    letter-spacing: -0.01em; color: var(--ink); text-align: center;
+  }
+  h1.logo .dot { color: var(--accent); }
+  p.tagline {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px;
+    color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 420px;
+  }
+  .card {
+    background: var(--card); border-radius: 18px; padding: 36px;
+    width: 100%; max-width: 620px; box-shadow: var(--shadow); border: 1px solid var(--border);
+  }
+  .card-label {
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600; margin-bottom: 10px;
+  }
+  #dropzone {
+    border: 1.5px dashed #C7BEA6;
+    background: repeating-linear-gradient(135deg, rgba(140,47,57,0.02) 0 2px, transparent 2px 14px);
+    border-radius: 14px; padding: 40px 20px; text-align: center; color: var(--ink-soft);
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  #dropzone svg { width: 34px; height: 34px; margin-bottom: 12px; stroke: var(--ink-soft); }
+  #dropzone.dragover svg { stroke: var(--accent); }
+  #dropzone .primary-text { font-family: 'Fraunces', serif; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
+  #dropzone .secondary-text { font-size: 13px; }
+  #fileInput { display: none; }
+  #previewGrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 14px 12px; margin-top: 24px;
+  }
+  .thumb {
+    position: relative; border-radius: 6px; overflow: hidden;
+    border: 6px solid #fff; outline: 1px solid var(--border); cursor: grab;
+    background: #f8fafc; aspect-ratio: 1/1; box-shadow: 0 4px 10px rgba(35,40,58,0.14);
+    transition: transform .15s ease;
+  }
+  .thumb:nth-child(3n+1) { transform: rotate(-2.5deg); }
+  .thumb:nth-child(3n+2) { transform: rotate(1.5deg); }
+  .thumb:nth-child(3n+3) { transform: rotate(-1deg); }
+  .thumb:hover { transform: rotate(0deg) scale(1.04); z-index: 2; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .num {
+    position: absolute; top: 4px; left: 4px; background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700; width: 17px; height: 17px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;
+  }
+  .thumb .remove {
+    position: absolute; top: 4px; right: 4px; background: rgba(35,40,58,0.75); color: #fff;
+    border: none; width: 17px; height: 17px; border-radius: 50%; font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  .thumb.dragging { opacity: 0.35; }
+  .hint {
+    font-size: 12.5px; color: var(--ink-soft); margin-top: 10px;
+    font-style: italic; font-family: 'Fraunces', serif;
+  }
+  .options-row { display: flex; gap: 12px; margin-top: 28px; }
+  .field { flex: 1; }
+  .field label {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600; margin-bottom: 6px;
+  }
+  select {
+    width: 100%; padding: 11px 12px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif;
+  }
+  .filename-wrap {
+    display: flex; align-items: center; border: 1px solid var(--border);
+    background: var(--paper); border-radius: 8px; overflow: hidden;
+  }
+  .filename-wrap input {
+    flex: 1; border: none; background: transparent; padding: 11px 0 11px 12px;
+    font-size: 14px; color: var(--ink); font-family: 'Inter', sans-serif; min-width: 0;
+  }
+  .filename-wrap input:focus { outline: none; }
+  .filename-wrap .ext { padding: 11px 12px 11px 4px; font-size: 14px; color: var(--ink-soft); font-family: 'Inter', sans-serif; }
+  button[type="submit"] {
+    width: 100%; margin-top: 24px; padding: 15px; border-radius: 10px; font-size: 14px;
+    letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    transition: background .15s, transform .08s; box-shadow: 0 6px 16px rgba(140,47,57,0.28);
+  }
+  button[type="submit"]:hover:not(:disabled) { background: var(--accent-dark); }
+  button[type="submit"]:active:not(:disabled) { transform: scale(0.98); }
+  button[type="submit"]:disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; }
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  @media (max-width: 480px) { h1.logo { font-size: 36px; } .card { padding: 24px; } }
+</style>
+</head>
+<body>
+
+<nav class="toolnav">
+  <a href="/" class="active">Image to PDF</a>
+  <a href="/image-compress.html">Image Compressor</a>
+</nav>
+
+<div class="eyebrow">Photos → Document</div>
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Turn a handful of photos into one clean, ready-to-share PDF.</p>
+
+<div class="card">
+  <form id="pdfForm" action="/convert" method="POST" enctype="multipart/form-data">
+    <div class="card-label">Add your photos</div>
+    <div id="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+      <div class="primary-text">Drop photos here, or click to browse</div>
+      <div class="secondary-text">JPG, PNG, and WEBP supported</div>
+    </div>
+    <input type="file" id="fileInput" name="images[]" accept="image/*" multiple>
+
+    <div id="previewGrid"></div>
+    <div class="hint" id="reorderHint" style="display:none;">Drag a photo to reorder the pages</div>
+
+    <div class="options-row">
+      <div class="field">
+        <label>Page size</label>
+        <select name="page_size">
+          <option value="A4">A4</option>
+          <option value="Letter">Letter</option>
+          <option value="Fit">Match photo size</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Orientation</label>
+        <select name="orientation">
+          <option value="P">Portrait</option>
+          <option value="L">Landscape</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top: 16px;">
+      <label>File name</label>
+      <div class="filename-wrap">
+        <input type="text" name="filename" id="filenameInput" value="PDF-ART-Document" maxlength="80" autocomplete="off">
+        <span class="ext">.pdf</span>
+      </div>
+    </div>
+
+    <button type="submit" id="submitBtn" disabled>Bind into PDF</button>
+  </form>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+</footer>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const previewGrid = document.getElementById('previewGrid');
+const submitBtn = document.getElementById('submitBtn');
+const reorderHint = document.getElementById('reorderHint');
+
+let filesArr = [];
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => addFiles(fileInput.files));
+
+function addFiles(fileList) {
+  [...fileList].forEach(f => { if (f.type.startsWith('image/')) filesArr.push(f); });
+  renderPreview();
+}
+
+function renderPreview() {
+  previewGrid.innerHTML = '';
+  filesArr.forEach((file, idx) => {
+    const url = URL.createObjectURL(file);
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.draggable = true;
+    div.dataset.idx = idx;
+    div.innerHTML = `
+      <img src="${url}">
+      <span class="num">${idx+1}</span>
+      <button type="button" class="remove">&times;</button>
+    `;
+    div.querySelector('.remove').addEventListener('click', (e) => {
+      e.stopPropagation();
+      filesArr.splice(idx, 1);
+      renderPreview();
+    });
+    div.addEventListener('dragstart', () => div.classList.add('dragging'));
+    div.addEventListener('dragend', () => { div.classList.remove('dragging'); syncOrderFromDOM(); });
+    previewGrid.appendChild(div);
+  });
+
+  [...previewGrid.querySelectorAll('.thumb')].forEach(thumb => {
+    thumb.addEventListener('dragover', e => {
+      e.preventDefault();
+      const dragging = previewGrid.querySelector('.dragging');
+      if (dragging && dragging !== thumb) {
+        const rect = thumb.getBoundingClientRect();
+        const next = (e.clientX - rect.left) > rect.width / 2;
+        thumb.parentNode.insertBefore(dragging, next ? thumb.nextSibling : thumb);
+      }
+    });
+  });
+
+  submitBtn.disabled = filesArr.length === 0;
+  reorderHint.style.display = filesArr.length > 1 ? 'block' : 'none';
+  updateFileInput();
+}
+
+function syncOrderFromDOM() {
+  const newOrder = [...previewGrid.querySelectorAll('.thumb')].map(t => parseInt(t.dataset.idx));
+  filesArr = newOrder.map(i => filesArr[i]);
+  renderPreview();
+}
+
+function updateFileInput() {
+  const dt = new DataTransfer();
+  filesArr.forEach(f => dt.items.add(f));
+  fileInput.files = dt.files;
+}
+
+document.getElementById('filenameInput').addEventListener('focus', function() { this.select(); });
+
+document.getElementById('pdfForm').addEventListener('submit', () => {
+  const nameInput = document.getElementById('filenameInput');
+  if (!nameInput.value.trim()) nameInput.value = 'PDF-ART-Document';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Binding your PDF…';
+  // Plain form submit — Flask handles this directly, browser triggers the
+  // download automatically because the response is sent as an attachment.
+  setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = 'Bind into PDF'; }, 4000);
+});
+</script>
+
+</body>
+</html>
