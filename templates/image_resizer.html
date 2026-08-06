@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PDF ART — Image Resizer</title>
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --good: #3D7A4F; --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 24px;
+  }
+  nav.toolnav {
+    display: flex; gap: 6px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px; margin-bottom: 28px; box-shadow: 0 4px 14px rgba(35,40,58,0.08);
+    flex-wrap: wrap; justify-content: center;
+  }
+  nav.toolnav a {
+    text-decoration: none; font-size: 12.5px; font-weight: 600; padding: 8px 14px;
+    border-radius: 999px; color: var(--ink-soft); transition: background .15s, color .15s; white-space: nowrap;
+  }
+  nav.toolnav a.active { background: var(--accent); color: #fff; }
+  nav.toolnav a:not(.active):hover { background: var(--paper-deep); color: var(--ink); }
+
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 440px; }
+
+  .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 680px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+  .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
+
+  #dropzone {
+    border: 1.5px dashed #C7BEA6;
+    background: repeating-linear-gradient(135deg, rgba(140,47,57,0.02) 0 2px, transparent 2px 14px);
+    border-radius: 14px; padding: 34px 20px; text-align: center; color: var(--ink-soft);
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  #dropzone svg { width: 30px; height: 30px; margin-bottom: 10px; stroke: var(--ink-soft); }
+  #dropzone .primary-text { font-family: 'Fraunces', serif; font-size: 16px; color: var(--ink); margin-bottom: 4px; }
+  #dropzone .secondary-text { font-size: 13px; }
+  #fileInput { display: none; }
+
+  .modeTabs { display: flex; gap: 6px; margin-top: 22px; background: var(--paper); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+  .modeTabs button {
+    flex: 1; padding: 9px; border: none; background: transparent; border-radius: 7px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; font-family: 'Inter', sans-serif; transition: background .15s, color .15s;
+  }
+  .modeTabs button.active { background: var(--accent); color: #fff; }
+
+  .controls { margin-top: 18px; display: none; gap: 16px; flex-wrap: wrap; }
+  .controls.active { display: flex; }
+  .ctrl-block { flex: 1; min-width: 140px; }
+  .ctrl-block label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 8px; }
+  .ctrl-block .val { color: var(--accent); font-weight: 700; }
+  input[type="number"], input[type="range"] { width: 100%; }
+  input[type="number"] {
+    padding: 10px 12px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif;
+  }
+  input[type="range"] { accent-color: var(--accent); height: 4px; }
+  .aspect-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+  .aspect-row input { accent-color: var(--accent); }
+
+  #summary {
+    margin-top: 20px; display: none; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  #summary .stat { text-align: center; }
+  #summary .stat .num { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: var(--ink); }
+  #summary .stat.reduction .num { color: var(--good); }
+  #summary .stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-top: 2px; }
+  #summary .arrow { color: var(--ink-soft); font-size: 16px; }
+
+  #imgList { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .imgcard { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+  .imgcard .thumb { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); background: #fff; }
+  .imgcard .meta { flex: 1; min-width: 0; }
+  .imgcard .fname { font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  .imgcard .sizes { font-size: 12px; color: var(--ink-soft); }
+  .imgcard .sizes .before { text-decoration: line-through; opacity: 0.7; }
+  .imgcard .sizes .after { color: var(--good); font-weight: 700; }
+  .imgcard .dl-btn { flex-shrink: 0; background: var(--card); border: 1px solid var(--border); color: var(--ink); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 7px; cursor: pointer; text-decoration: none; }
+  .imgcard .dl-btn:hover { background: var(--accent-tint); border-color: var(--accent); color: var(--accent-dark); }
+  .imgcard .remove { flex-shrink: 0; background: none; border: none; color: var(--ink-soft); font-size: 16px; cursor: pointer; padding: 2px 4px; }
+  .imgcard .remove:hover { color: var(--accent); }
+  .imgcard.processing .sizes { color: var(--ink-soft); font-style: italic; }
+
+  .actions { display: flex; gap: 10px; margin-top: 22px; }
+  button.primary, button.secondary {
+    flex: 1; padding: 14px; border-radius: 10px; font-size: 13.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif; border: none; cursor: pointer;
+    transition: background .15s, transform .08s;
+  }
+  button.primary { background: var(--accent); color: #fff; box-shadow: 0 6px 16px rgba(140,47,57,0.28); }
+  button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+  button.primary:active:not(:disabled) { transform: scale(0.98); }
+  button.primary:disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; }
+  button.secondary { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
+  button.secondary:hover:not(:disabled) { background: var(--paper-deep); }
+  button.secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 32px; } .card { padding: 22px; } .actions { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<nav class="toolnav">
+  <a href="/">Image to PDF</a>
+  <a href="/image-compress.html">Image Compressor</a>
+  <a href="/passport-photo.html">Passport Photo</a>
+  <a href="/image-resizer.html" class="active">Image Resizer</a>
+</nav>
+
+<div class="eyebrow">Exact Dimensions Or Exact KB</div>
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Resize photos to a precise width and height, or hit an exact file size for online forms.</p>
+
+<div class="card">
+  <div class="card-label">Add your photos</div>
+  <div id="dropzone">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+    <div class="primary-text">Drop photos here, or click to browse</div>
+    <div class="secondary-text">JPG, PNG, and WEBP supported</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple>
+
+  <div class="modeTabs">
+    <button type="button" id="tabDims" class="active">By Dimensions</button>
+    <button type="button" id="tabKB">By File Size (KB)</button>
+  </div>
+
+  <div class="controls active" id="ctrlDims">
+    <div class="ctrl-block">
+      <label>Width (px)</label>
+      <input type="number" id="widthInput" value="1024" min="10">
+    </div>
+    <div class="ctrl-block">
+      <label>Height (px)</label>
+      <input type="number" id="heightInput" value="1024" min="10">
+    </div>
+    <div class="ctrl-block" style="flex-basis:100%;">
+      <div class="aspect-row">
+        <input type="checkbox" id="lockAspect" checked>
+        <label style="margin:0; text-transform:none; letter-spacing:0;">Lock aspect ratio to the first photo</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls" id="ctrlKB">
+    <div class="ctrl-block">
+      <label>Target size — <span class="val" id="kbVal">50 KB</span></label>
+      <input type="range" id="kbSlider" min="10" max="500" value="50" step="5">
+    </div>
+  </div>
+
+  <div id="summary">
+    <div class="stat"><div class="num" id="sumBefore">0 KB</div><div class="lbl">Original</div></div>
+    <div class="arrow">→</div>
+    <div class="stat"><div class="num" id="sumAfter">0 KB</div><div class="lbl">Resized</div></div>
+    <div class="stat reduction"><div class="num" id="sumReduction">0%</div><div class="lbl">Smaller</div></div>
+  </div>
+
+  <div id="imgList"></div>
+
+  <div class="actions" id="actionsRow" style="display:none;">
+    <button class="secondary" id="clearBtn">Clear All</button>
+    <button class="primary" id="downloadAllBtn">Download All (ZIP)</button>
+  </div>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+</footer>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const imgList = document.getElementById('imgList');
+const tabDims = document.getElementById('tabDims');
+const tabKB = document.getElementById('tabKB');
+const ctrlDims = document.getElementById('ctrlDims');
+const ctrlKB = document.getElementById('ctrlKB');
+const widthInput = document.getElementById('widthInput');
+const heightInput = document.getElementById('heightInput');
+const lockAspect = document.getElementById('lockAspect');
+const kbSlider = document.getElementById('kbSlider');
+const kbVal = document.getElementById('kbVal');
+const summary = document.getElementById('summary');
+const sumBefore = document.getElementById('sumBefore');
+const sumAfter = document.getElementById('sumAfter');
+const sumReduction = document.getElementById('sumReduction');
+const actionsRow = document.getElementById('actionsRow');
+const clearBtn = document.getElementById('clearBtn');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+let mode = 'dims'; // 'dims' | 'kb'
+let items = [];
+let seq = 0;
+let debounceTimer = null;
+let firstAspect = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+tabDims.addEventListener('click', () => switchMode('dims'));
+tabKB.addEventListener('click', () => switchMode('kb'));
+
+function switchMode(m) {
+  mode = m;
+  tabDims.classList.toggle('active', m === 'dims');
+  tabKB.classList.toggle('active', m === 'kb');
+  ctrlDims.classList.toggle('active', m === 'dims');
+  ctrlKB.classList.toggle('active', m === 'kb');
+  scheduleReprocess();
+}
+
+widthInput.addEventListener('input', () => {
+  if (lockAspect.checked && firstAspect) {
+    heightInput.value = Math.round(parseInt(widthInput.value, 10) / firstAspect) || '';
+  }
+  scheduleReprocess();
+});
+heightInput.addEventListener('input', () => {
+  if (lockAspect.checked && firstAspect) {
+    widthInput.value = Math.round(parseInt(heightInput.value, 10) * firstAspect) || '';
+  }
+  scheduleReprocess();
+});
+kbSlider.addEventListener('input', () => {
+  kbVal.textContent = kbSlider.value + ' KB';
+  scheduleReprocess();
+});
+
+function scheduleReprocess() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { processAll(); }, 300);
+}
+
+function addFiles(fileList) {
+  [...fileList].forEach(f => {
+    if (!f.type.startsWith('image/')) return;
+    items.push({ id: seq++, file: f, originalUrl: URL.createObjectURL(f), resultBlob: null, resultSize: 0, resultDims: '' });
+  });
+  if (items.length && !firstAspect) {
+    const im = new Image();
+    im.onload = () => {
+      firstAspect = im.naturalWidth / im.naturalHeight;
+      widthInput.value = im.naturalWidth > 1600 ? 1600 : im.naturalWidth;
+      heightInput.value = Math.round(parseInt(widthInput.value, 10) / firstAspect);
+      render();
+      processAll();
+    };
+    im.src = items[0].originalUrl;
+  } else {
+    render();
+    processAll();
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function render() {
+  imgList.innerHTML = '';
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'imgcard' + (item.resultBlob ? '' : ' processing');
+    row.dataset.id = item.id;
+    const pct = item.resultSize ? Math.max(0, Math.round((1 - item.resultSize / item.file.size) * 100)) : null;
+    row.innerHTML = `
+      <img class="thumb" src="${item.originalUrl}">
+      <div class="meta">
+        <div class="fname">${item.file.name}</div>
+        <div class="sizes">
+          <span class="before">${formatSize(item.file.size)}</span>
+          ${item.resultBlob ? `→ <span class="after">${formatSize(item.resultSize)}</span> ${item.resultDims ? '(' + item.resultDims + ')' : ''}` : '→ resizing…'}
+        </div>
+      </div>
+      ${item.resultBlob ? `<a class="dl-btn" download="${resizedName(item.file.name)}">Download</a>` : ''}
+      <button class="remove" title="Remove">&times;</button>
+    `;
+    if (item.resultBlob) row.querySelector('.dl-btn').href = URL.createObjectURL(item.resultBlob);
+    row.querySelector('.remove').addEventListener('click', () => {
+      items = items.filter(i => i.id !== item.id);
+      render();
+      updateSummary();
+    });
+    imgList.appendChild(row);
+  });
+  actionsRow.style.display = items.length ? 'flex' : 'none';
+  downloadAllBtn.disabled = !items.some(i => i.resultBlob);
+}
+
+function resizedName(originalName) {
+  const dot = originalName.lastIndexOf('.');
+  const base = dot > -1 ? originalName.slice(0, dot) : originalName;
+  return base + '-resized.jpg';
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = url;
+  });
+}
+
+function drawToBlob(im, w, h, quality) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(im, 0, 0, w, h);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+}
+
+async function resizeByDimensions(item) {
+  const im = await loadImage(item.originalUrl);
+  const w = Math.max(1, parseInt(widthInput.value, 10) || im.naturalWidth);
+  const h = Math.max(1, parseInt(heightInput.value, 10) || im.naturalHeight);
+  const blob = await drawToBlob(im, w, h, 0.9);
+  item.resultBlob = blob;
+  item.resultSize = blob.size;
+  item.resultDims = w + '×' + h;
+}
+
+async function resizeToTargetKB(item) {
+  const im = await loadImage(item.originalUrl);
+  const targetBytes = parseInt(kbSlider.value, 10) * 1024;
+  const qualityLadder = [92, 85, 78, 70, 62, 55, 48, 40, 32, 25, 18, 12, 8, 5];
+
+  let w = im.naturalWidth, h = im.naturalHeight;
+  // Cap starting dimensions so very large phone photos don't take forever
+  const maxStart = 2000;
+  if (Math.max(w, h) > maxStart) {
+    const r = maxStart / Math.max(w, h);
+    w = Math.round(w * r); h = Math.round(h * r);
+  }
+
+  let best = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    for (const q of qualityLadder) {
+      const blob = await drawToBlob(im, w, h, q / 100);
+      if (!best || Math.abs(blob.size - targetBytes) < Math.abs(best.size - targetBytes)) {
+        best = { blob, w, h };
+      }
+      if (blob.size <= targetBytes) {
+        item.resultBlob = blob;
+        item.resultSize = blob.size;
+        item.resultDims = w + '×' + h;
+        return;
+      }
+    }
+    // Still too big even at lowest quality — shrink dimensions and try again
+    w = Math.round(w * 0.85);
+    h = Math.round(h * 0.85);
+    if (w < 60 || h < 60) break;
+  }
+
+  // Couldn't reach target exactly — use the closest attempt we found
+  item.resultBlob = best.blob;
+  item.resultSize = best.blob.size;
+  item.resultDims = best.w + '×' + best.h;
+}
+
+async function processAll() {
+  if (items.length === 0) return;
+  for (const item of items) {
+    if (mode === 'dims') await resizeByDimensions(item);
+    else await resizeToTargetKB(item);
+  }
+  render();
+  updateSummary();
+}
+
+function updateSummary() {
+  const done = items.filter(i => i.resultBlob);
+  if (done.length === 0) { summary.style.display = 'none'; return; }
+  const totalBefore = done.reduce((s, i) => s + i.file.size, 0);
+  const totalAfter = done.reduce((s, i) => s + i.resultSize, 0);
+  const reduction = totalBefore > 0 ? Math.round((1 - totalAfter / totalBefore) * 100) : 0;
+  sumBefore.textContent = formatSize(totalBefore);
+  sumAfter.textContent = formatSize(totalAfter);
+  sumReduction.textContent = reduction + '%';
+  summary.style.display = 'flex';
+}
+
+clearBtn.addEventListener('click', () => {
+  items = [];
+  firstAspect = null;
+  render();
+  summary.style.display = 'none';
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+  const ready = items.filter(i => i.resultBlob);
+  if (ready.length === 0) return;
+  downloadAllBtn.disabled = true;
+  downloadAllBtn.textContent = 'Zipping…';
+  const zip = new JSZip();
+  ready.forEach(item => zip.file(resizedName(item.file.name), item.resultBlob));
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = 'PDF-ART-Resized-Images.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  downloadAllBtn.disabled = false;
+  downloadAllBtn.textContent = 'Download All (ZIP)';
+});
+</script>
+
+</body>
+</html>

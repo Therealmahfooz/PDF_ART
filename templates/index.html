@@ -49,11 +49,12 @@
     background: var(--card); border: 1px solid var(--border);
     border-radius: 999px; padding: 5px; margin-bottom: 28px;
     box-shadow: 0 4px 14px rgba(35,40,58,0.08);
+    flex-wrap: wrap; justify-content: center;
   }
   nav.toolnav a {
-    text-decoration: none; font-size: 13px; font-weight: 600;
-    padding: 8px 16px; border-radius: 999px; color: var(--ink-soft);
-    transition: background .15s, color .15s;
+    text-decoration: none; font-size: 12.5px; font-weight: 600;
+    padding: 8px 14px; border-radius: 999px; color: var(--ink-soft);
+    transition: background .15s, color .15s; white-space: nowrap;
   }
   nav.toolnav a.active { background: var(--accent); color: #fff; }
   nav.toolnav a:not(.active):hover { background: var(--paper-deep); color: var(--ink); }
@@ -160,6 +161,8 @@
 <nav class="toolnav">
   <a href="/" class="active">Image to PDF</a>
   <a href="/image-compress.html">Image Compressor</a>
+  <a href="/passport-photo.html">Passport Photo</a>
+  <a href="/image-resizer.html">Image Resizer</a>
 </nav>
 
 <div class="eyebrow">Photos → Document</div>

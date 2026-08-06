@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PDF ART — Passport & ID Photo Maker</title>
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --good: #3D7A4F; --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 24px;
+  }
+  nav.toolnav {
+    display: flex; gap: 6px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px; margin-bottom: 28px; box-shadow: 0 4px 14px rgba(35,40,58,0.08);
+    flex-wrap: wrap; justify-content: center;
+  }
+  nav.toolnav a {
+    text-decoration: none; font-size: 12.5px; font-weight: 600; padding: 8px 14px;
+    border-radius: 999px; color: var(--ink-soft); transition: background .15s, color .15s; white-space: nowrap;
+  }
+  nav.toolnav a.active { background: var(--accent); color: #fff; }
+  nav.toolnav a:not(.active):hover { background: var(--paper-deep); color: var(--ink); }
+
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 440px; }
+
+  .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 640px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+  .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
+
+  #dropzone {
+    border: 1.5px dashed #C7BEA6;
+    background: repeating-linear-gradient(135deg, rgba(140,47,57,0.02) 0 2px, transparent 2px 14px);
+    border-radius: 14px; padding: 34px 20px; text-align: center; color: var(--ink-soft);
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  #dropzone svg { width: 30px; height: 30px; margin-bottom: 10px; stroke: var(--ink-soft); }
+  #dropzone .primary-text { font-family: 'Fraunces', serif; font-size: 16px; color: var(--ink); margin-bottom: 4px; }
+  #dropzone .secondary-text { font-size: 13px; }
+  #fileInput { display: none; }
+
+  .field { margin-top: 20px; }
+  .field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 8px; }
+  select, input[type="number"] {
+    width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif;
+  }
+  .custom-dims { display: none; gap: 10px; margin-top: 10px; }
+  .custom-dims .cd { flex: 1; }
+  .custom-dims label { font-size: 10.5px; margin-bottom: 4px; }
+
+  .editor { margin-top: 24px; display: none; }
+  .editor-layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  #frame {
+    position: relative; overflow: hidden; background: #ddd;
+    border-radius: 6px; border: 2px solid var(--accent); box-shadow: 0 8px 20px rgba(35,40,58,0.18);
+    touch-action: none; cursor: grab; flex-shrink: 0;
+  }
+  #frame.grabbing { cursor: grabbing; }
+  #frame img { position: absolute; left: 0; top: 0; user-select: none; pointer-events: none; }
+  .editor-side { flex: 1; min-width: 180px; }
+  .editor-side label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 8px; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; }
+  .dim-readout { font-family: 'Fraunces', serif; font-size: 14px; color: var(--ink-soft); margin-top: 10px; }
+  .dim-readout strong { color: var(--ink); }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 8px; font-style: italic; font-family: 'Fraunces', serif; }
+
+  .actions { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+  button.primary, button.secondary {
+    flex: 1; min-width: 160px; padding: 14px; border-radius: 10px; font-size: 13px;
+    letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif;
+    border: none; cursor: pointer; transition: background .15s, transform .08s;
+  }
+  button.primary { background: var(--accent); color: #fff; box-shadow: 0 6px 16px rgba(140,47,57,0.28); }
+  button.primary:hover { background: var(--accent-dark); }
+  button.primary:active { transform: scale(0.98); }
+  button.secondary { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
+  button.secondary:hover { background: var(--paper-deep); }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 32px; } .card { padding: 22px; } }
+</style>
+</head>
+<body>
+
+<nav class="toolnav">
+  <a href="/">Image to PDF</a>
+  <a href="/image-compress.html">Image Compressor</a>
+  <a href="/passport-photo.html" class="active">Passport Photo</a>
+  <a href="/image-resizer.html">Image Resizer</a>
+</nav>
+
+<div class="eyebrow">Print-Ready in Seconds</div>
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Crop your photo to the exact passport or ID size, ready to print.</p>
+
+<div class="card">
+  <div id="uploadStage">
+    <div class="card-label">Add your photo</div>
+    <div id="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+      <div class="primary-text">Drop a photo here, or click to browse</div>
+      <div class="secondary-text">A clear, front-facing photo works best</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div class="field">
+      <label>Photo type</label>
+      <select id="presetSelect">
+        <option value="51:51">India / US Passport — 2×2 in (51×51 mm)</option>
+        <option value="35:45">UK / EU / Schengen Passport (35×45 mm)</option>
+        <option value="25:35">PAN Card Photo (25×35 mm)</option>
+        <option value="35:35">OCI / Visa Photo (35×35 mm)</option>
+        <option value="custom">Custom size…</option>
+      </select>
+      <div class="custom-dims" id="customDims">
+        <div class="cd"><label>Width (mm)</label><input type="number" id="customW" value="35" min="10" max="150"></div>
+        <div class="cd"><label>Height (mm)</label><input type="number" id="customH" value="45" min="10" max="150"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="editor" id="editorStage">
+    <div class="editor-layout">
+      <div id="frame"><img id="editImg" alt=""></div>
+      <div class="editor-side">
+        <label>Zoom</label>
+        <input type="range" id="zoomSlider" min="100" max="300" value="100">
+        <div class="dim-readout">Output: <strong id="dimReadout"></strong> @ 300 DPI</div>
+        <div class="hint">Drag the photo to reposition it inside the frame</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="secondary" id="changePhotoBtn">Change Photo</button>
+      <button class="primary" id="downloadOneBtn">Download Photo</button>
+      <button class="primary" id="downloadSheetBtn">Download 4×6 Sheet</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+</footer>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const uploadStage = document.getElementById('uploadStage');
+const editorStage = document.getElementById('editorStage');
+const presetSelect = document.getElementById('presetSelect');
+const customDims = document.getElementById('customDims');
+const customW = document.getElementById('customW');
+const customH = document.getElementById('customH');
+const frame = document.getElementById('frame');
+const editImg = document.getElementById('editImg');
+const zoomSlider = document.getElementById('zoomSlider');
+const dimReadout = document.getElementById('dimReadout');
+const changePhotoBtn = document.getElementById('changePhotoBtn');
+const downloadOneBtn = document.getElementById('downloadOneBtn');
+const downloadSheetBtn = document.getElementById('downloadSheetBtn');
+
+const DPI = 300;
+const FRAME_MAX = 300; // on-screen preview size cap in px
+
+let img = null;
+let targetMM = { w: 51, h: 51 };
+let baseScale = 1;   // scale at which the image exactly covers the frame (zoom = 100%)
+let dispW = 0, dispH = 0;
+let offsetX = 0, offsetY = 0;
+let dragging = false, dragStartX = 0, dragStartY = 0, dragOrigX = 0, dragOrigY = 0;
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+presetSelect.addEventListener('change', () => {
+  if (presetSelect.value === 'custom') {
+    customDims.style.display = 'flex';
+    targetMM = { w: parseFloat(customW.value) || 35, h: parseFloat(customH.value) || 45 };
+  } else {
+    customDims.style.display = 'none';
+    const [w, h] = presetSelect.value.split(':').map(Number);
+    targetMM = { w, h };
+  }
+  if (img) setupFrame();
+});
+customW.addEventListener('input', () => { targetMM.w = parseFloat(customW.value) || 35; if (img) setupFrame(); });
+customH.addEventListener('input', () => { targetMM.h = parseFloat(customH.value) || 45; if (img) setupFrame(); });
+
+function loadFile(file) {
+  if (!file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  im.onload = () => {
+    img = im;
+    editImg.src = url;
+    uploadStage.style.display = 'none';
+    editorStage.style.display = 'block';
+    setupFrame();
+  };
+  im.src = url;
+}
+
+function setupFrame() {
+  const ratio = targetMM.w / targetMM.h;
+  let fw, fh;
+  if (ratio >= 1) { fw = FRAME_MAX; fh = FRAME_MAX / ratio; }
+  else { fh = FRAME_MAX; fw = FRAME_MAX * ratio; }
+  frame.style.width = fw + 'px';
+  frame.style.height = fh + 'px';
+
+  baseScale = Math.max(fw / img.naturalWidth, fh / img.naturalHeight);
+  zoomSlider.value = 100;
+  applyTransform(true);
+
+  const pxW = Math.round(targetMM.w / 25.4 * DPI);
+  const pxH = Math.round(targetMM.h / 25.4 * DPI);
+  dimReadout.textContent = pxW + ' × ' + pxH + ' px';
+}
+
+function applyTransform(recenter) {
+  const zoom = parseInt(zoomSlider.value, 10) / 100;
+  const scale = baseScale * zoom;
+  dispW = img.naturalWidth * scale;
+  dispH = img.naturalHeight * scale;
+
+  const fw = frame.clientWidth, fh = frame.clientHeight;
+
+  if (recenter) {
+    offsetX = (fw - dispW) / 2;
+    offsetY = (fh - dispH) / 2;
+  }
+  offsetX = Math.min(0, Math.max(fw - dispW, offsetX));
+  offsetY = Math.min(0, Math.max(fh - dispH, offsetY));
+
+  editImg.style.width = dispW + 'px';
+  editImg.style.height = dispH + 'px';
+  editImg.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+}
+
+zoomSlider.addEventListener('input', () => applyTransform(false));
+
+frame.addEventListener('pointerdown', e => {
+  dragging = true;
+  frame.classList.add('grabbing');
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  dragOrigX = offsetX; dragOrigY = offsetY;
+  frame.setPointerCapture(e.pointerId);
+});
+frame.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  offsetX = dragOrigX + (e.clientX - dragStartX);
+  offsetY = dragOrigY + (e.clientY - dragStartY);
+  const fw = frame.clientWidth, fh = frame.clientHeight;
+  offsetX = Math.min(0, Math.max(fw - dispW, offsetX));
+  offsetY = Math.min(0, Math.max(fh - dispH, offsetY));
+  editImg.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+});
+frame.addEventListener('pointerup', () => { dragging = false; frame.classList.remove('grabbing'); });
+frame.addEventListener('pointercancel', () => { dragging = false; frame.classList.remove('grabbing'); });
+
+changePhotoBtn.addEventListener('click', () => {
+  img = null;
+  uploadStage.style.display = 'block';
+  editorStage.style.display = 'none';
+  fileInput.value = '';
+});
+
+function renderCropCanvas(pxW, pxH) {
+  const zoom = parseInt(zoomSlider.value, 10) / 100;
+  const scale = baseScale * zoom;
+  const scaleDispToImg = 1 / scale;
+
+  const cropX = -offsetX * scaleDispToImg;
+  const cropY = -offsetY * scaleDispToImg;
+  const cropW = frame.clientWidth * scaleDispToImg;
+  const cropH = frame.clientHeight * scaleDispToImg;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = pxW;
+  canvas.height = pxH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, pxW, pxH);
+  return canvas;
+}
+
+downloadOneBtn.addEventListener('click', () => {
+  const pxW = Math.round(targetMM.w / 25.4 * DPI);
+  const pxH = Math.round(targetMM.h / 25.4 * DPI);
+  const canvas = renderCropCanvas(pxW, pxH);
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'PDF-ART-Passport-Photo.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, 'image/jpeg', 0.95);
+});
+
+downloadSheetBtn.addEventListener('click', () => {
+  const pxW = Math.round(targetMM.w / 25.4 * DPI);
+  const pxH = Math.round(targetMM.h / 25.4 * DPI);
+  const photoCanvas = renderCropCanvas(pxW, pxH);
+
+  // 4x6 inch sheet at 300 DPI
+  const sheetW = 6 * DPI, sheetH = 4 * DPI;
+  const gap = 20;
+  const cols = Math.max(1, Math.floor((sheetW + gap) / (pxW + gap)));
+  const rows = Math.max(1, Math.floor((sheetH + gap) / (pxH + gap)));
+
+  const gridW = cols * pxW + (cols - 1) * gap;
+  const gridH = rows * pxH + (rows - 1) * gap;
+  const startX = (sheetW - gridW) / 2;
+  const startY = (sheetH - gridH) / 2;
+
+  const sheet = document.createElement('canvas');
+  sheet.width = sheetW;
+  sheet.height = sheetH;
+  const ctx = sheet.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, sheetW, sheetH);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = startX + c * (pxW + gap);
+      const y = startY + r * (pxH + gap);
+      ctx.drawImage(photoCanvas, x, y, pxW, pxH);
+    }
+  }
+
+  sheet.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'PDF-ART-Photo-Sheet-4x6.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, 'image/jpeg', 0.95);
+});
+</script>
+
+</body>
+</html>

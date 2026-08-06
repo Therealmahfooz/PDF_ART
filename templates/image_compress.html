@@ -59,12 +59,15 @@
     padding: 5px;
     margin-bottom: 28px;
     box-shadow: 0 4px 14px rgba(35,40,58,0.08);
+    flex-wrap: wrap;
+    justify-content: center;
   }
   nav.toolnav a {
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
-    padding: 8px 16px;
+    padding: 8px 14px;
+    white-space: nowrap;
     border-radius: 999px;
     color: var(--ink-soft);
     transition: background .15s, color .15s;
@@ -298,6 +301,8 @@
 <nav class="toolnav">
   <a href="/">Image to PDF</a>
   <a href="/image-compress.html" class="active">Image Compressor</a>
+  <a href="/passport-photo.html">Passport Photo</a>
+  <a href="/image-resizer.html">Image Resizer</a>
 </nav>
 
 <div class="eyebrow">Shrink Without Losing Quality</div>
