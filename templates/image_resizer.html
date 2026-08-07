@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PDF ART — Image Resizer</title>
+<meta name="description" content="Resize images to an exact width and height, or to a specific file size in KB — ideal for online form uploads. Free and instant.">
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+
 
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
@@ -502,6 +512,24 @@ clearBtn.addEventListener('click', () => {
   summary.style.display = 'none';
 });
 
+// Robust download trigger — works across Chrome, Edge, and Android browsers
+// (including in-app/WebView browsers that sometimes ignore a synthetic click
+// on an anchor removed on the same tick).
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 2000);
+}
+
 downloadAllBtn.addEventListener('click', async () => {
   const ready = items.filter(i => i.resultBlob);
   if (ready.length === 0) return;
@@ -510,12 +538,7 @@ downloadAllBtn.addEventListener('click', async () => {
   const zip = new JSZip();
   ready.forEach(item => zip.file(resizedName(item.file.name), item.resultBlob));
   const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(zipBlob);
-  a.download = 'PDF-ART-Resized-Images.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadBlob(zipBlob, 'PDF-ART-Resized-Images.zip');
   downloadAllBtn.disabled = false;
   downloadAllBtn.textContent = 'Download All (ZIP)';
 });

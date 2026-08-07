@@ -7,6 +7,16 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>PDF ART — Image Compressor</title>
+<meta name="description" content="Compress JPG, PNG, and WEBP images online for free. Shrink file size while keeping quality — processed right in your browser, nothing is uploaded.">
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+
 
 <!-- Home screen / app icon setup -->
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
@@ -592,6 +602,25 @@ clearBtn.addEventListener('click', () => {
   summary.style.display = 'none';
 });
 
+// Robust download trigger — works across Chrome, Edge, and Android browsers
+// (including in-app/WebView browsers that sometimes ignore a synthetic click
+// on an anchor removed on the same tick). Keeping the element around briefly
+// and setting target="_blank" as a fallback covers those cases.
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 2000);
+}
+
 downloadAllBtn.addEventListener('click', async () => {
   const ready = items.filter(i => i.compressedBlob);
   if (ready.length === 0) return;
@@ -605,12 +634,7 @@ downloadAllBtn.addEventListener('click', async () => {
   });
   const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(zipBlob);
-  a.download = 'PDF-ART-Compressed-Images.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  downloadBlob(zipBlob, 'PDF-ART-Compressed-Images.zip');
 
   downloadAllBtn.disabled = false;
   downloadAllBtn.textContent = 'Download All (ZIP)';

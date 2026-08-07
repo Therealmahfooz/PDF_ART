@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PDF ART — Passport & ID Photo Maker</title>
+<meta name="description" content="Create passport, PAN card, OCI, and visa photos online for free. Crop to the exact size and print a ready-to-use 4x6 photo sheet.">
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+
 
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
@@ -228,7 +238,19 @@
     <div class="actions">
       <button class="secondary" id="changePhotoBtn">Change Photo</button>
       <button class="primary" id="downloadOneBtn">Download Photo</button>
-      <button class="primary" id="downloadSheetBtn">Download 4×6 Sheet</button>
+    </div>
+
+    <div class="field">
+      <label>Print sheet — copies</label>
+      <select id="copiesSelect">
+        <option value="auto">Auto (fit as many as possible)</option>
+        <option value="4">4 photos</option>
+        <option value="6" selected>6 photos</option>
+        <option value="8">8 photos</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="primary" id="downloadSheetBtn" style="flex-basis:100%;">Download 4×6 Sheet</button>
     </div>
   </div>
 </div>
@@ -254,6 +276,7 @@ const dimReadout = document.getElementById('dimReadout');
 const changePhotoBtn = document.getElementById('changePhotoBtn');
 const downloadOneBtn = document.getElementById('downloadOneBtn');
 const downloadSheetBtn = document.getElementById('downloadSheetBtn');
+const copiesSelect = document.getElementById('copiesSelect');
 
 const DPI = 300;
 const FRAME_MAX = 300; // on-screen preview size cap in px
@@ -387,35 +410,52 @@ function renderCropCanvas(pxW, pxH) {
   return canvas;
 }
 
+// Robust download trigger — works across Chrome, Edge, and Android browsers
+// (including in-app/WebView browsers that sometimes ignore the synthetic
+// click on a same-tick-removed anchor). Keeping the element in the DOM for a
+// moment and falling back to opening the file in a new tab covers the cases
+// where the download attribute alone is ignored.
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 2000);
+}
+
 downloadOneBtn.addEventListener('click', () => {
   const pxW = Math.round(targetMM.w / 25.4 * DPI);
   const pxH = Math.round(targetMM.h / 25.4 * DPI);
   const canvas = renderCropCanvas(pxW, pxH);
   canvas.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'PDF-ART-Passport-Photo.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadBlob(blob, 'PDF-ART-Passport-Photo.jpg');
   }, 'image/jpeg', 0.95);
 });
+
+// Preset grids chosen to sit naturally on a 6x4 in (landscape) sheet
+const COPY_GRIDS = {
+  4: { cols: 2, rows: 2 },
+  6: { cols: 3, rows: 2 },
+  8: { cols: 4, rows: 2 },
+};
 
 downloadSheetBtn.addEventListener('click', () => {
   const pxW = Math.round(targetMM.w / 25.4 * DPI);
   const pxH = Math.round(targetMM.h / 25.4 * DPI);
   const photoCanvas = renderCropCanvas(pxW, pxH);
 
-  // 4x6 inch sheet at 300 DPI
+  // 4x6 inch sheet at 300 DPI (landscape: 6in wide, 4in tall)
   const sheetW = 6 * DPI, sheetH = 4 * DPI;
   const gap = 20;
-  const cols = Math.max(1, Math.floor((sheetW + gap) / (pxW + gap)));
-  const rows = Math.max(1, Math.floor((sheetH + gap) / (pxH + gap)));
-
-  const gridW = cols * pxW + (cols - 1) * gap;
-  const gridH = rows * pxH + (rows - 1) * gap;
-  const startX = (sheetW - gridW) / 2;
-  const startY = (sheetH - gridH) / 2;
+  const margin = 40;
+  const choice = copiesSelect.value;
 
   const sheet = document.createElement('canvas');
   sheet.width = sheetW;
@@ -424,21 +464,52 @@ downloadSheetBtn.addEventListener('click', () => {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, sheetW, sheetH);
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = startX + c * (pxW + gap);
-      const y = startY + r * (pxH + gap);
-      ctx.drawImage(photoCanvas, x, y, pxW, pxH);
+  if (choice === 'auto') {
+    // Fit as many full-size copies as possible (original behaviour)
+    const cols = Math.max(1, Math.floor((sheetW + gap) / (pxW + gap)));
+    const rows = Math.max(1, Math.floor((sheetH + gap) / (pxH + gap)));
+    const gridW = cols * pxW + (cols - 1) * gap;
+    const gridH = rows * pxH + (rows - 1) * gap;
+    const startX = (sheetW - gridW) / 2;
+    const startY = (sheetH - gridH) / 2;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        ctx.drawImage(photoCanvas, startX + c * (pxW + gap), startY + r * (pxH + gap), pxW, pxH);
+      }
+    }
+  } else {
+    // Fixed copy count — scale each photo to fit evenly into the chosen grid
+    const { cols, rows } = COPY_GRIDS[choice];
+    const usableW = sheetW - margin * 2;
+    const usableH = sheetH - margin * 2;
+    const cellW = (usableW - (cols - 1) * gap) / cols;
+    const cellH = (usableH - (rows - 1) * gap) / rows;
+
+    // Scale the photo to fit inside the cell while keeping its aspect ratio
+    const photoRatio = pxW / pxH;
+    let drawW = cellW, drawH = cellW / photoRatio;
+    if (drawH > cellH) { drawH = cellH; drawW = cellH * photoRatio; }
+
+    const gridW = cols * cellW + (cols - 1) * gap;
+    const gridH = rows * cellH + (rows - 1) * gap;
+    const startX = (sheetW - gridW) / 2;
+    const startY = (sheetH - gridH) / 2;
+
+    let placed = 0;
+    for (let r = 0; r < rows && placed < choice; r++) {
+      for (let c = 0; c < cols && placed < choice; c++) {
+        const cellX = startX + c * (cellW + gap);
+        const cellY = startY + r * (cellH + gap);
+        const x = cellX + (cellW - drawW) / 2;
+        const y = cellY + (cellH - drawH) / 2;
+        ctx.drawImage(photoCanvas, x, y, drawW, drawH);
+        placed++;
+      }
     }
   }
 
   sheet.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'PDF-ART-Photo-Sheet-4x6.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadBlob(blob, 'PDF-ART-Photo-Sheet-4x6.jpg');
   }, 'image/jpeg', 0.95);
 });
 </script>
