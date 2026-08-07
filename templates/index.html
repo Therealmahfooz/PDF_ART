@@ -59,6 +59,30 @@
   nav.toolnav a.active { background: var(--accent); color: #fff; }
   nav.toolnav a:not(.active):hover { background: var(--paper-deep); color: var(--ink); }
 
+  .toolnav-wrap { position: relative; width: 100%; display: flex; justify-content: center; }
+  .toolnav-trigger { display: none; }
+  @media (max-width: 600px) {
+    .toolnav-trigger {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      width: 100%; max-width: 300px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+      padding: 11px 18px; font-size: 13px; font-weight: 700; color: var(--ink);
+      box-shadow: 0 4px 14px rgba(35,40,58,0.08); cursor: pointer; font-family: 'Inter', sans-serif;
+      margin-bottom: 28px;
+    }
+    .toolnav-trigger svg { width: 13px; height: 13px; stroke: var(--ink-soft); transition: transform .2s; flex-shrink: 0; }
+    .toolnav-trigger.open svg { transform: rotate(180deg); }
+    nav.toolnav {
+      display: none; position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+      flex-direction: column; align-items: stretch; width: 100%; max-width: 300px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 8px; box-shadow: 0 12px 30px rgba(35,40,58,0.18); z-index: 20; gap: 2px;
+      margin-bottom: 0;
+    }
+    nav.toolnav.open { display: flex; }
+    nav.toolnav a { padding: 11px 14px; border-radius: 8px; text-align: left; }
+  }
+
   .eyebrow {
     font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px;
@@ -153,18 +177,56 @@
   footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
   footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
   footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  footer .contact { margin-top: 8px; }
+  footer .contact a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid transparent;
+    transition: border-color .15s;
+  }
+  footer .contact a:hover { border-color: var(--accent); }
   @media (max-width: 480px) { h1.logo { font-size: 36px; } .card { padding: 24px; } }
 </style>
 </head>
 <body>
 
-<nav class="toolnav">
+<div class="toolnav-wrap">
+  <button type="button" class="toolnav-trigger" id="toolnavTrigger">
+    <span id="toolnavCurrent">Tools</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
+  <nav class="toolnav" id="toolnavList">
   <a href="/" class="active">Image to PDF</a>
   <a href="/pdf-to-jpg.html">PDF to JPG</a>
   <a href="/image-compress.html">Image Compressor</a>
   <a href="/passport-photo.html">Passport Photo</a>
   <a href="/image-resizer.html">Image Resizer</a>
 </nav>
+</div>
+<script>
+(function(){
+  var trigger = document.getElementById('toolnavTrigger');
+  var nav = document.getElementById('toolnavList');
+  var label = document.getElementById('toolnavCurrent');
+  var active = nav.querySelector('a.active');
+  if (active) label.textContent = active.textContent;
+  trigger.addEventListener('click', function(e){
+    e.stopPropagation();
+    var isOpen = nav.classList.toggle('open');
+    trigger.classList.toggle('open', isOpen);
+  });
+  document.addEventListener('click', function(e){
+    if (!trigger.contains(e.target) && !nav.contains(e.target)) {
+      nav.classList.remove('open');
+      trigger.classList.remove('open');
+    }
+  });
+})();
+</script>
+
 
 <div class="eyebrow">Photos → Document</div>
 <h1 class="logo">PDF ART<span class="dot">.</span></h1>
@@ -215,6 +277,7 @@
 
 <footer>
   <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+  <div class="contact"><a href="mailto:YOUR-EMAIL@example.com?subject=PDF%20ART%20-%20Support">Contact Us</a></div>
 </footer>
 
 <script>
