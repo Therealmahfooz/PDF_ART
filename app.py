@@ -2,10 +2,12 @@ import io
 import os
 import re
 import tempfile
+import zipfile
 
 from flask import Flask, render_template, request, send_file, abort
 from PIL import Image, ImageOps
 from fpdf import FPDF
+import fitz  # PyMuPDF
 
 app = Flask(__name__)
 
@@ -71,6 +73,70 @@ def passport_photo():
 @app.route('/image-resizer.html')
 def image_resizer():
     return render_template('image_resizer.html')
+
+
+@app.route('/pdf-to-jpg.html')
+def pdf_to_jpg_page():
+    return render_template('pdf_to_jpg.html')
+
+
+@app.route('/pdf-to-images', methods=['POST'])
+def pdf_to_images():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    fmt = request.form.get('format', 'jpg').lower()
+    if fmt not in ('jpg', 'png'):
+        fmt = 'jpg'
+
+    try:
+        dpi = int(request.form.get('dpi', 150))
+    except ValueError:
+        dpi = 150
+    dpi = max(72, min(dpi, 300))
+
+    try:
+        doc = fitz.open(stream=f.read(), filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.page_count == 0:
+        abort(400, description='This PDF has no pages.')
+
+    base_name = safe_filename(request.form.get('filename'), 'PDF-ART-Pages')[:-4]  # strip the .pdf we added
+    ext = 'jpg' if fmt == 'jpg' else 'png'
+    pixmap_fmt = 'jpeg' if fmt == 'jpg' else 'png'
+    mimetype = 'image/jpeg' if fmt == 'jpg' else 'image/png'
+
+    if doc.page_count == 1:
+        pix = doc[0].get_pixmap(dpi=dpi)
+        img_bytes = pix.tobytes(pixmap_fmt)
+        return send_file(
+            io.BytesIO(img_bytes),
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=f'{base_name}.{ext}',
+        )
+
+    mem_zip = io.BytesIO()
+    with zipfile.ZipFile(mem_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=dpi)
+            img_bytes = pix.tobytes(pixmap_fmt)
+            zf.writestr(f'{base_name}-page-{i + 1}.{ext}', img_bytes)
+    mem_zip.seek(0)
+
+    return send_file(
+        mem_zip,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'{base_name}.zip',
+    )
 
 
 @app.route('/convert', methods=['POST'])
