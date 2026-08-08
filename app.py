@@ -4,16 +4,81 @@ import os
 import re
 import tempfile
 import zipfile
+from functools import wraps
 
-from flask import Flask, render_template, request, send_file, abort, send_from_directory
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for
+from authlib.integrations.flask_client import OAuth
 from PIL import Image, ImageOps
 from fpdf import FPDF
 import fitz  # PyMuPDF
 
+load_dotenv()  # loads GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / FLASK_SECRET_KEY from a local .env file, if present
+
 app = Flask(__name__)
+
+# Session secret — on Render, set this as an environment variable named
+# FLASK_SECRET_KEY (Dashboard -> your service -> Environment). The fallback
+# below is only for local testing.
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-only-change-me')
 
 # Max upload size: 50 MB total (adjust if needed)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+# --- Google Sign-In ---
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'},
+)
+
+
+def login_required(view_func):
+    """Redirects to Google sign-in if nobody is logged in yet, then sends
+    the person back to the page they originally wanted."""
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        if not session.get('user'):
+            return redirect(url_for('login', next=request.path))
+        return view_func(*args, **kwargs)
+    return wrapped
+
+
+@app.context_processor
+def inject_user():
+    return dict(current_user=session.get('user'))
+
+
+@app.route('/login')
+def login():
+    if not os.environ.get('GOOGLE_CLIENT_ID') or not os.environ.get('GOOGLE_CLIENT_SECRET'):
+        abort(503, description='Google Sign-In isn\'t configured on this server yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET as environment variables and restart the app.')
+    session['next_url'] = request.args.get('next', '/')
+    redirect_uri = url_for('auth_callback', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+
+@app.route('/auth/callback')
+def auth_callback():
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+    if user_info:
+        session['user'] = {
+            'name': user_info.get('name'),
+            'email': user_info.get('email'),
+            'picture': user_info.get('picture'),
+        }
+    next_url = session.pop('next_url', '/')
+    return redirect(next_url)
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('index'))
 
 ALLOWED_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
 MAX_DIM = 1800  # downscale very large phone photos, same idea as the PHP version
@@ -263,11 +328,13 @@ def convert():
 
 
 @app.route('/pdf-text-editor.html')
+@login_required
 def pdf_text_editor_page():
     return render_template('pdf_text_editor.html')
 
 
 @app.route('/extract-pdf-text', methods=['POST'])
+@login_required
 def extract_pdf_text():
     file = request.files.get('pdf')
     if not file or file.filename == '':
@@ -329,6 +396,7 @@ def extract_pdf_text():
 
 
 @app.route('/apply-pdf-edits', methods=['POST'])
+@login_required
 def apply_pdf_edits():
     pdf_b64 = request.form.get('pdf_data', '')
     try:
@@ -418,6 +486,11 @@ def apply_pdf_edits():
 @app.errorhandler(400)
 def bad_request(e):
     return (e.description or 'Something went wrong.'), 400
+
+
+@app.errorhandler(503)
+def service_unavailable(e):
+    return (e.description or 'This feature is temporarily unavailable.'), 503
 
 
 if __name__ == '__main__':
