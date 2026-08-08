@@ -88,6 +88,16 @@
   .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 620px; box-shadow: var(--shadow); border: 1px solid var(--border); }
   .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
 
+  .userbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 22px; font-size: 13px;
+  }
+  .userbar .who { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+  .userbar img { width: 26px; height: 26px; border-radius: 50%; }
+  .userbar a.logout { color: var(--ink-soft); text-decoration: none; font-weight: 600; font-size: 12px; }
+  .userbar a.logout:hover { color: var(--accent); }
+
   #dropzone {
     border: 1.5px dashed #C7BEA6;
     background: repeating-linear-gradient(135deg, rgba(140,47,57,0.02) 0 2px, transparent 2px 14px);
@@ -175,6 +185,15 @@
 <p class="tagline">Edit the text inside a PDF while keeping the original font, size, and position.</p>
 
 <div class="card">
+  {% if current_user %}
+  <div class="userbar">
+    <div class="who">
+      {% if current_user.picture %}<img src="{{ current_user.picture }}" alt="">{% endif %}
+      <span>Signed in as {{ current_user.name or current_user.email }}</span>
+    </div>
+    <a class="logout" href="/logout">Sign out</a>
+  </div>
+  {% endif %}
   <form id="uploadForm" action="/extract-pdf-text" method="POST" enctype="multipart/form-data">
     <div class="card-label">Add your PDF</div>
     <div id="dropzone">
