@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PDF ART — Edit PDF Text</title>
+<meta name="robots" content="noindex">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 40px;
+  }
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 38px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 15px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 28px; max-width: 460px; }
+
+  .card { background: var(--card); border-radius: 18px; padding: 30px; width: 100%; max-width: 680px; box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 20px; }
+
+  .page-heading {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 15px; color: var(--accent);
+    margin: 0 0 14px 0; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .line-row { margin-bottom: 12px; }
+  .line-row label {
+    display: block; font-size: 10.5px; color: var(--ink-soft); margin-bottom: 4px;
+    letter-spacing: 0.03em; font-family: 'Inter', sans-serif;
+  }
+  .line-row input[type="text"] {
+    width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif;
+  }
+  .line-row input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .filename-field { margin-top: 8px; }
+  .filename-field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+  .filename-wrap { display: flex; align-items: center; border: 1px solid var(--border); background: var(--paper); border-radius: 8px; overflow: hidden; max-width: 340px; }
+  .filename-wrap input { flex: 1; border: none; background: transparent; padding: 11px 0 11px 12px; font-size: 14px; color: var(--ink); font-family: 'Inter', sans-serif; min-width: 0; }
+  .filename-wrap input:focus { outline: none; }
+  .filename-wrap .ext { padding: 11px 12px 11px 4px; font-size: 14px; color: var(--ink-soft); }
+
+  .sticky-bar {
+    position: sticky; bottom: 16px; width: 100%; max-width: 680px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 20px; box-shadow: 0 12px 30px rgba(35,40,58,0.18);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  button[type="submit"] {
+    padding: 14px 22px; border-radius: 10px; font-size: 13.5px;
+    letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    transition: background .15s, transform .08s; box-shadow: 0 6px 16px rgba(140,47,57,0.28);
+    white-space: nowrap;
+  }
+  button[type="submit"]:hover:not(:disabled) { background: var(--accent-dark); }
+  button[type="submit"]:active:not(:disabled) { transform: scale(0.98); }
+  button[type="submit"]:disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; }
+
+  a.back-link { color: var(--ink-soft); font-size: 12.5px; text-decoration: none; }
+  a.back-link:hover { color: var(--accent); }
+
+  .notice { font-size: 12.5px; color: var(--ink-soft); text-align: center; margin-bottom: 20px; max-width: 500px; font-style: italic; font-family: 'Fraunces', serif; }
+</style>
+</head>
+<body>
+
+<div class="eyebrow">Step 2 of 2</div>
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Edit any line below, then save to generate the updated PDF.</p>
+
+{% if truncated %}
+<div class="notice">This PDF has {{ page_count }} pages — only the first 20 are shown here to keep things fast.</div>
+{% endif %}
+
+<form id="editForm" action="/apply-pdf-edits" method="POST">
+  <input type="hidden" name="pdf_data" value="{{ pdf_b64 }}">
+
+  {% set current_page = namespace(value=-1) %}
+  {% for block in blocks %}
+    {% if block.page != current_page.value %}
+      {% if current_page.value != -1 %}</div>{% endif %}
+      {% set current_page.value = block.page %}
+      <div class="card">
+        <div class="page-heading">Page {{ block.page + 1 }}</div>
+    {% endif %}
+
+    <div class="line-row">
+      <label>Line {{ loop.index0 + 1 }}</label>
+      <input type="text" name="text_{{ block.id }}" value="{{ block.text }}">
+      <input type="hidden" name="page_{{ block.id }}" value="{{ block.page }}">
+      <input type="hidden" name="x0_{{ block.id }}" value="{{ block.x0 }}">
+      <input type="hidden" name="y0_{{ block.id }}" value="{{ block.y0 }}">
+      <input type="hidden" name="x1_{{ block.id }}" value="{{ block.x1 }}">
+      <input type="hidden" name="y1_{{ block.id }}" value="{{ block.y1 }}">
+      <input type="hidden" name="size_{{ block.id }}" value="{{ block.size }}">
+      <input type="hidden" name="font_{{ block.id }}" value="{{ block.font }}">
+      <input type="hidden" name="color_{{ block.id }}" value="{{ block.color }}">
+    </div>
+  {% endfor %}
+  </div>
+
+  <div class="sticky-bar">
+    <a href="/pdf-text-editor.html" class="back-link">&larr; Choose a different PDF</a>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div class="filename-wrap">
+        <input type="text" name="filename" value="PDF-ART-Edited" maxlength="80">
+        <span class="ext">.pdf</span>
+      </div>
+      <button type="submit" id="submitBtn">Save &amp; Download PDF</button>
+    </div>
+  </div>
+</form>
+
+<script>
+document.getElementById('editForm').addEventListener('submit', function() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Building your PDF…';
+});
+</script>
+
+</body>
+</html>

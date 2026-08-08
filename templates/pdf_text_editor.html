@@ -3,17 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PDF ART — PDF to JPG</title>
-<meta name="description" content="Convert every page of a PDF into JPG or PNG images for free. Get a single image or a ZIP for multi-page PDFs, instantly.">
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-XXXXXXXXXX');
-</script>
-
+<title>PDF ART — Edit PDF Text</title>
+<meta name="description" content="Edit the text inside a PDF, right in your browser — change words or lines while keeping the original font, size, and position.">
 
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
@@ -25,6 +16,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -84,7 +83,7 @@
   .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
   h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
   h1.logo .dot { color: var(--accent); }
-  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 440px; }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 460px; }
 
   .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 620px; box-shadow: var(--shadow); border: 1px solid var(--border); }
   .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
@@ -103,32 +102,16 @@
   #fileInput { display: none; }
 
   #fileChosen {
-    display: none;
-    margin-top: 16px;
-    align-items: center;
-    gap: 10px;
-    background: var(--paper);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
+    display: none; margin-top: 16px; align-items: center; gap: 10px;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
   }
-  #fileChosen .picon {
-    flex-shrink: 0; width: 28px; height: 32px; background: #fff;
-    border: 1px solid var(--border); border-radius: 3px; position: relative;
-  }
-  #fileChosen .picon::before {
-    content: 'PDF'; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
-    font-size: 6px; font-weight: 800; color: var(--accent); letter-spacing: 0.03em;
-  }
+  #fileChosen .picon { flex-shrink: 0; width: 28px; height: 32px; background: #fff; border: 1px solid var(--border); border-radius: 3px; position: relative; }
+  #fileChosen .picon::before { content: 'PDF'; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); font-size: 6px; font-weight: 800; color: var(--accent); letter-spacing: 0.03em; }
   #fileChosen .fname { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #fileChosen .remove { background: none; border: none; color: var(--ink-soft); font-size: 16px; cursor: pointer; }
   #fileChosen .remove:hover { color: var(--accent); }
 
-  .options-row { display: flex; gap: 12px; margin-top: 28px; }
-  .field { flex: 1; }
-  .field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
-  select { width: 100%; padding: 11px 12px; border-radius: 8px; font-size: 14px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif; }
-  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 10px; font-style: italic; font-family: 'Fraunces', serif; }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 16px; font-style: italic; font-family: 'Fraunces', serif; }
 
   button[type="submit"] {
     width: 100%; margin-top: 24px; padding: 15px; border-radius: 10px; font-size: 14px;
@@ -144,15 +127,7 @@
   footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
   footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
   footer .contact { margin-top: 8px; }
-  footer .contact a {
-    color: var(--accent);
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    border-bottom: 1px solid transparent;
-    transition: border-color .15s;
-  }
+  footer .contact a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
   footer .contact a:hover { border-color: var(--accent); }
 
   @media (max-width: 480px) { h1.logo { font-size: 36px; } .card { padding: 24px; } }
@@ -167,8 +142,8 @@
   </button>
   <nav class="toolnav" id="toolnavList">
   <a href="/">Image to PDF</a>
-  <a href="/pdf-to-jpg.html" class="active">PDF to JPG</a>
-  <a href="/pdf-text-editor.html">Edit PDF Text</a>
+  <a href="/pdf-to-jpg.html">PDF to JPG</a>
+  <a href="/pdf-text-editor.html" class="active">Edit PDF Text</a>
   <a href="/image-compress.html">Image Compressor</a>
   <a href="/passport-photo.html">Passport Photo</a>
   <a href="/image-resizer.html">Image Resizer</a>
@@ -195,18 +170,17 @@
 })();
 </script>
 
-
-<div class="eyebrow">Document → Images</div>
+<div class="eyebrow">Change The Words, Keep The Look</div>
 <h1 class="logo">PDF ART<span class="dot">.</span></h1>
-<p class="tagline">Turn every page of a PDF into a separate JPG or PNG image.</p>
+<p class="tagline">Edit the text inside a PDF while keeping the original font, size, and position.</p>
 
 <div class="card">
-  <form id="pdfToJpgForm" action="/pdf-to-images" method="POST" enctype="multipart/form-data">
+  <form id="uploadForm" action="/extract-pdf-text" method="POST" enctype="multipart/form-data">
     <div class="card-label">Add your PDF</div>
     <div id="dropzone">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
       <div class="primary-text">Drop a PDF here, or click to browse</div>
-      <div class="secondary-text">One PDF file</div>
+      <div class="secondary-text">Works best with text-based PDFs (not scanned images)</div>
     </div>
     <input type="file" id="fileInput" name="pdf" accept="application/pdf">
 
@@ -216,26 +190,9 @@
       <button type="button" class="remove" id="removeFile">&times;</button>
     </div>
 
-    <div class="options-row">
-      <div class="field">
-        <label>Output format</label>
-        <select name="format">
-          <option value="jpg">JPG</option>
-          <option value="png">PNG</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Quality</label>
-        <select name="dpi">
-          <option value="150" selected>Standard (150 DPI)</option>
-          <option value="300">High (300 DPI)</option>
-          <option value="96">Small / Fast (96 DPI)</option>
-        </select>
-      </div>
-    </div>
-    <div class="hint">Multi-page PDFs are delivered as a ZIP, one image per page</div>
+    <div class="hint">Up to 20 pages per PDF. Each line of text becomes an editable field on the next screen.</div>
 
-    <button type="submit" id="submitBtn" disabled>Convert to Images</button>
+    <button type="submit" id="submitBtn" disabled>Extract Text to Edit</button>
   </form>
 </div>
 
@@ -251,7 +208,7 @@ const fileChosen = document.getElementById('fileChosen');
 const fnameText = document.getElementById('fnameText');
 const removeFile = document.getElementById('removeFile');
 const submitBtn = document.getElementById('submitBtn');
-const form = document.getElementById('pdfToJpgForm');
+const form = document.getElementById('uploadForm');
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -283,8 +240,7 @@ removeFile.addEventListener('click', () => {
 
 form.addEventListener('submit', () => {
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Converting…';
-  setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = 'Convert to Images'; }, 5000);
+  submitBtn.textContent = 'Reading your PDF…';
 });
 </script>
 
