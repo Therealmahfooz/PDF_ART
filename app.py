@@ -146,7 +146,7 @@ def auth_callback():
 @app.route("/logout")
 def logout():
     session.pop("user", None)
-    return redirect(url_for("index"))
+    return redirect(url_for("home"))
 
 
 # ---------------------------------------------------------
@@ -338,6 +338,11 @@ def resolve_font(
 # Main pages
 # ---------------------------------------------------------
 @app.route("/")
+def home():
+    return render_template("home.html")
+
+
+@app.route("/image-to-pdf.html")
 def index():
     return render_template("index.html")
 
