@@ -127,6 +127,7 @@
     text-align: center;
   }
   h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
   p.tagline {
     font-family: 'Fraunces', serif;
     font-style: italic;
@@ -349,7 +350,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
   </button>
   <nav class="toolnav" id="toolnavList">
-  <a href="/">Image to PDF</a>
+  <a href="/">Home</a>
+  <a href="/image-to-pdf.html">Image to PDF</a>
   <a href="/pdf-to-jpg.html">PDF to JPG</a>
   <a href="/pdf-text-editor.html">Edit PDF Text{% if not current_user %} 🔒{% endif %}</a>
   <a href="/image-compress.html" class="active">Image Compressor</a>
@@ -380,6 +382,7 @@
 
 
 <div class="eyebrow">Shrink Without Losing Quality</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
 <h1 class="logo">PDF ART<span class="dot">.</span></h1>
 <p class="tagline">Compress your photos right in the browser — nothing is uploaded anywhere.</p>
 

@@ -85,6 +85,7 @@
   .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
   h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
   h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
   p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 440px; }
 
   .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 680px; box-shadow: var(--shadow); border: 1px solid var(--border); }
@@ -188,7 +189,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
   </button>
   <nav class="toolnav" id="toolnavList">
-  <a href="/">Image to PDF</a>
+  <a href="/">Home</a>
+  <a href="/image-to-pdf.html">Image to PDF</a>
   <a href="/pdf-to-jpg.html">PDF to JPG</a>
   <a href="/pdf-text-editor.html">Edit PDF Text{% if not current_user %} 🔒{% endif %}</a>
   <a href="/image-compress.html">Image Compressor</a>
@@ -219,6 +221,7 @@
 
 
 <div class="eyebrow">Exact Dimensions Or Exact KB</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
 <h1 class="logo">PDF ART<span class="dot">.</span></h1>
 <p class="tagline">Resize photos to a precise width and height, or hit an exact file size for online forms.</p>
 
