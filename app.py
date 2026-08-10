@@ -2,12 +2,14 @@ import base64
 import io
 import os
 import re
+import sqlite3
 import tempfile
 import zipfile
+from datetime import datetime, timezone
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for
+from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g
 from authlib.integrations.flask_client import OAuth
 import fitz  # PyMuPDF
 
@@ -22,6 +24,97 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-only-change-me')
 
 # Max upload size: 50 MB total (adjust if needed)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+# --- Simple built-in analytics (page views + logins) ---
+# Stored in a small SQLite file next to app.py. NOTE: on free hosting tiers
+# with an ephemeral filesystem (e.g. Render's free web service plan), this
+# file is wiped whenever the app redeploys or restarts — fine for a quick
+# look at usage, but not for long-term history. For that, point
+# ANALYTICS_DB_PATH at a persistent disk, or swap this for a real database.
+DB_PATH = os.environ.get('ANALYTICS_DB_PATH', os.path.join(app.root_path, 'analytics.db'))
+
+# Which pages count as "tool usage" in the admin dashboard, and the friendly
+# name shown there. Anything not in this dict is not logged.
+TOOL_LABELS = {
+    '/': 'Home',
+    '/image-to-pdf.html': 'Image to PDF',
+    '/pdf-to-jpg.html': 'PDF to JPG',
+    '/pdf-text-editor.html': 'Edit PDF Text',
+    '/protect-pdf.html': 'Protect / Unlock PDF',
+    '/image-compress.html': 'Image Compressor',
+    '/passport-photo.html': 'Passport Photo',
+    '/image-resizer.html': 'Image Resizer',
+}
+
+# Comma-separated list of Google account emails allowed to see /admin.
+# Set this as an environment variable, e.g. ADMIN_EMAILS=you@gmail.com
+ADMIN_EMAILS = {
+    e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()
+}
+
+
+def get_db():
+    db = getattr(g, '_analytics_db', None)
+    if db is None:
+        db = g._analytics_db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+    return db
+
+
+@app.teardown_appcontext
+def close_db(exception=None):
+    db = getattr(g, '_analytics_db', None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS page_views (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT NOT NULL,
+        tool TEXT NOT NULL,
+        user_email TEXT,
+        user_name TEXT,
+        ts TEXT NOT NULL
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS login_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        name TEXT,
+        ts TEXT NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+
+@app.before_request
+def log_page_view():
+    if request.method != 'GET':
+        return
+    label = TOOL_LABELS.get(request.path)
+    if not label:
+        return
+    user = session.get('user')
+    try:
+        db = get_db()
+        db.execute(
+            'INSERT INTO page_views (path, tool, user_email, user_name, ts) VALUES (?, ?, ?, ?, ?)',
+            (
+                request.path,
+                label,
+                user.get('email') if user else None,
+                user.get('name') if user else None,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        db.commit()
+    except Exception:
+        pass  # analytics should never break the actual page
+
 
 # --- Google Sign-In ---
 oauth = OAuth(app)
@@ -45,9 +138,25 @@ def login_required(view_func):
     return wrapped
 
 
+def admin_required(view_func):
+    """Like login_required, but also checks the signed-in email is in
+    ADMIN_EMAILS. Anyone else gets a 403."""
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        user = session.get('user')
+        if not user:
+            return redirect(url_for('login', next=request.path))
+        if not ADMIN_EMAILS or (user.get('email') or '').lower() not in ADMIN_EMAILS:
+            abort(403, description="You don't have access to this page.")
+        return view_func(*args, **kwargs)
+    return wrapped
+
+
 @app.context_processor
 def inject_user():
-    return dict(current_user=session.get('user'))
+    user = session.get('user')
+    is_admin = bool(user and (user.get('email') or '').lower() in ADMIN_EMAILS)
+    return dict(current_user=user, is_admin=is_admin)
 
 
 @app.route('/login')
@@ -69,6 +178,15 @@ def auth_callback():
             'email': user_info.get('email'),
             'picture': user_info.get('picture'),
         }
+        try:
+            db = get_db()
+            db.execute(
+                'INSERT INTO login_events (email, name, ts) VALUES (?, ?, ?)',
+                (user_info.get('email'), user_info.get('name'), datetime.now(timezone.utc).isoformat()),
+            )
+            db.commit()
+        except Exception:
+            pass
     next_url = session.pop('next_url', '/')
     return redirect(next_url)
 
@@ -498,9 +616,55 @@ def apply_pdf_edits():
     )
 
 
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    db = get_db()
+
+    total_views = db.execute('SELECT COUNT(*) c FROM page_views').fetchone()['c']
+    views_today = db.execute(
+        "SELECT COUNT(*) c FROM page_views WHERE date(ts) = date('now')"
+    ).fetchone()['c']
+    unique_users = db.execute(
+        'SELECT COUNT(DISTINCT user_email) c FROM page_views WHERE user_email IS NOT NULL'
+    ).fetchone()['c']
+    total_logins = db.execute('SELECT COUNT(*) c FROM login_events').fetchone()['c']
+
+    tool_counts = db.execute(
+        'SELECT tool, COUNT(*) c FROM page_views GROUP BY tool ORDER BY c DESC'
+    ).fetchall()
+    max_count = tool_counts[0]['c'] if tool_counts else 1
+
+    recent_logins = db.execute(
+        'SELECT email, name, ts FROM login_events ORDER BY ts DESC LIMIT 25'
+    ).fetchall()
+
+    recent_views = db.execute(
+        'SELECT path, tool, user_email, user_name, ts FROM page_views ORDER BY ts DESC LIMIT 40'
+    ).fetchall()
+
+    return render_template(
+        'admin.html',
+        total_views=total_views,
+        views_today=views_today,
+        unique_users=unique_users,
+        total_logins=total_logins,
+        tool_counts=tool_counts,
+        max_count=max_count,
+        recent_logins=recent_logins,
+        recent_views=recent_views,
+        admin_configured=bool(ADMIN_EMAILS),
+    )
+
+
 @app.errorhandler(400)
 def bad_request(e):
     return (e.description or 'Something went wrong.'), 400
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    return (e.description or "You don't have access to this page."), 403
 
 
 @app.errorhandler(503)
