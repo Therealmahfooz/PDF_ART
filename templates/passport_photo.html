@@ -144,6 +144,19 @@
   button.secondary { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
   button.secondary:hover { background: var(--paper-deep); }
 
+  .bg-swatches { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .bg-swatches .swatch {
+    width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border);
+    cursor: pointer; padding: 0; transition: transform .1s, border-color .15s; flex: none;
+  }
+  .bg-swatches .swatch:hover { transform: scale(1.08); }
+  .bg-swatches .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-tint); }
+  .bg-swatches input[type="color"] {
+    width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--border);
+    padding: 2px; cursor: pointer; background: var(--card); flex: none;
+  }
+  #removeBgBtn:disabled { opacity: 0.7; cursor: default; }
+
   footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
   footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
   footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
@@ -209,6 +222,20 @@
       </div>
     </div>
 
+    <div class="actions" id="bgActions">
+      <button class="secondary" id="removeBgBtn" style="flex-basis:100%;">Remove Background</button>
+    </div>
+    <div class="field" id="bgControls" style="display:none;">
+      <label>Background Color</label>
+      <div class="bg-swatches" id="bgSwatches">
+        <button type="button" class="swatch active" data-color="#FFFFFF" style="background:#FFFFFF;" title="White"></button>
+        <button type="button" class="swatch" data-color="#4A90D9" style="background:#4A90D9;" title="Blue"></button>
+        <button type="button" class="swatch" data-color="#D9D9D9" style="background:#D9D9D9;" title="Grey"></button>
+        <button type="button" class="swatch" data-color="#B23A2E" style="background:#B23A2E;" title="Red"></button>
+        <input type="color" id="customBgColor" value="#FFFFFF" title="Custom color">
+      </div>
+    </div>
+
     <div class="actions">
       <button class="secondary" id="changePhotoBtn">Change Photo</button>
       <button class="primary" id="downloadOneBtn">Download Photo</button>
@@ -234,6 +261,7 @@
   <div class="contact"><a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a></div>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 <script>
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -251,6 +279,10 @@ const changePhotoBtn = document.getElementById('changePhotoBtn');
 const downloadOneBtn = document.getElementById('downloadOneBtn');
 const downloadSheetBtn = document.getElementById('downloadSheetBtn');
 const copiesSelect = document.getElementById('copiesSelect');
+const removeBgBtn = document.getElementById('removeBgBtn');
+const bgControls = document.getElementById('bgControls');
+const bgSwatches = document.getElementById('bgSwatches');
+const customBgColor = document.getElementById('customBgColor');
 
 const DPI = 300;
 const FRAME_MAX = 300; // on-screen preview size cap in px
@@ -261,6 +293,10 @@ let baseScale = 1;   // scale at which the image exactly covers the frame (zoom 
 let dispW = 0, dispH = 0;
 let offsetX = 0, offsetY = 0;
 let dragging = false, dragStartX = 0, dragStartY = 0, dragOrigX = 0, dragOrigY = 0;
+let bgRemoved = false;
+let currentBgColor = '#FFFFFF';
+let segmenter = null;
+let segmentResolve = null, segmentReject = null;
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -360,9 +396,84 @@ frame.addEventListener('pointercancel', () => { dragging = false; frame.classLis
 
 changePhotoBtn.addEventListener('click', () => {
   img = null;
+  bgRemoved = false;
+  currentBgColor = '#FFFFFF';
+  frame.style.backgroundColor = '';
+  bgControls.style.display = 'none';
+  removeBgBtn.disabled = false;
+  removeBgBtn.textContent = 'Remove Background';
   uploadStage.style.display = 'block';
   editorStage.style.display = 'none';
   fileInput.value = '';
+});
+
+// --- Background removal (runs entirely in the browser, no upload to any server) ---
+function getSegmenter() {
+  if (segmenter) return segmenter;
+  segmenter = new SelfieSegmentation({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
+  });
+  segmenter.setOptions({ modelSelection: 0 });
+  segmenter.onResults((results) => {
+    if (segmentResolve) { segmentResolve(results); segmentResolve = null; segmentReject = null; }
+  });
+  return segmenter;
+}
+
+function segmentImage(imageEl) {
+  return new Promise((resolve, reject) => {
+    segmentResolve = resolve;
+    segmentReject = reject;
+    getSegmenter().send({ image: imageEl }).catch(err => {
+      if (segmentReject) { segmentReject(err); segmentResolve = null; segmentReject = null; }
+    });
+  });
+}
+
+function applyBgColor(color) {
+  currentBgColor = color;
+  frame.style.backgroundColor = color;
+  bgSwatches.querySelectorAll('.swatch').forEach(s => {
+    s.classList.toggle('active', s.dataset.color.toLowerCase() === color.toLowerCase());
+  });
+}
+
+bgSwatches.querySelectorAll('.swatch').forEach(sw => {
+  sw.addEventListener('click', () => applyBgColor(sw.dataset.color));
+});
+customBgColor.addEventListener('input', () => applyBgColor(customBgColor.value));
+
+removeBgBtn.addEventListener('click', async () => {
+  if (!img) return;
+  removeBgBtn.disabled = true;
+  removeBgBtn.textContent = 'Removing background…';
+  try {
+    const results = await segmentImage(img);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'source-over';
+    const dataUrl = canvas.toDataURL('image/png');
+
+    const newImg = new Image();
+    newImg.onload = () => {
+      img = newImg;
+      editImg.src = dataUrl;
+      bgRemoved = true;
+      bgControls.style.display = 'block';
+      applyBgColor(currentBgColor);
+      removeBgBtn.textContent = 'Background Removed ✓';
+    };
+    newImg.src = dataUrl;
+  } catch (err) {
+    alert('Background remove nahi ho paaya. Please internet connection check karke dobara try karein.');
+    removeBgBtn.disabled = false;
+    removeBgBtn.textContent = 'Remove Background';
+  }
 });
 
 function renderCropCanvas(pxW, pxH) {
@@ -380,6 +491,10 @@ function renderCropCanvas(pxW, pxH) {
   canvas.height = pxH;
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
+  if (bgRemoved) {
+    ctx.fillStyle = currentBgColor;
+    ctx.fillRect(0, 0, pxW, pxH);
+  }
   ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, pxW, pxH);
   return canvas;
 }
