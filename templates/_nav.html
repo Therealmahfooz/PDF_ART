@@ -1,0 +1,186 @@
+<style>
+  .menu-toggle {
+    position: fixed; top: 18px; left: 18px; z-index: 100;
+    width: 42px; height: 42px; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(35,40,58,0.10);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .menu-toggle svg { width: 19px; height: 19px; stroke: var(--ink); }
+
+  .menu-overlay {
+    position: fixed; inset: 0; background: rgba(35,40,58,0.35);
+    z-index: 199; opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .menu-drawer {
+    position: fixed; top: 0; left: 0; height: 100%; width: 320px; max-width: 86vw;
+    background: var(--card); z-index: 200; box-shadow: 0 0 30px rgba(35,40,58,0.25);
+    transform: translateX(-100%); transition: transform .25s ease;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .menu-drawer.open { transform: translateX(0); }
+
+  .drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 18px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .drawer-logo { display: flex; align-items: center; gap: 8px; font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; color: var(--ink); }
+  .drawer-logo img { width: 26px; height: 26px; border-radius: 50%; }
+  .drawer-logo .dot { color: var(--accent); }
+  .menu-close { background: none; border: none; font-size: 22px; color: var(--ink-soft); cursor: pointer; line-height: 1; padding: 4px; }
+  .menu-close:hover { color: var(--accent); }
+
+  .drawer-user {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 18px; background: var(--paper); margin: 14px 18px 0; border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .drawer-user img { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; }
+  .drawer-user-info { min-width: 0; flex: 1; }
+  .drawer-user-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drawer-logout { font-size: 11.5px; color: var(--ink-soft); text-decoration: none; font-weight: 600; }
+  .drawer-logout:hover { color: var(--accent); }
+
+  .drawer-section-label {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft);
+    font-weight: 700; padding: 18px 18px 10px;
+  }
+  .drawer-tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 18px 20px; }
+  .drawer-tool-card {
+    display: flex; flex-direction: column; gap: 6px; padding: 14px 12px;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+    text-decoration: none; color: var(--ink); transition: border-color .15s, background .15s;
+  }
+  .drawer-tool-card:hover { border-color: var(--accent); background: var(--accent-tint); }
+  .drawer-tool-card.active { border-color: var(--accent); background: var(--accent-tint); }
+  .drawer-tool-card .dt-icon {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--card);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .drawer-tool-card .dt-icon svg { width: 15px; height: 15px; stroke: var(--accent); }
+  .drawer-tool-card .dt-name { font-size: 12.5px; font-weight: 700; font-family: 'Fraunces', serif; line-height: 1.2; }
+  .drawer-tool-card .dt-badge { font-size: 9px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  @media (min-width: 900px) {
+    .menu-drawer { width: 360px; }
+    .drawer-tool-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+</button>
+
+<div class="menu-overlay" id="menuOverlay"></div>
+
+<aside class="menu-drawer" id="menuDrawer">
+  <div class="drawer-header">
+    <div class="drawer-logo"><img src="/static/icons/icon-192.png" alt="">PDF ART<span class="dot">.</span></div>
+    <button type="button" class="menu-close" id="menuClose" aria-label="Close menu">&times;</button>
+  </div>
+
+  {% if current_user %}
+  <div class="drawer-user">
+    {% if current_user.picture %}<img src="{{ current_user.picture }}" alt="">{% endif %}
+    <div class="drawer-user-info">
+      <div class="drawer-user-name">{{ current_user.name or current_user.email }}</div>
+      <a href="/logout" class="drawer-logout">Sign out</a>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="drawer-section-label">Tools</div>
+  <div class="drawer-tool-grid">
+
+    <a href="/" class="drawer-tool-card nav-item" data-path="/">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg></div>
+      <div class="dt-name">Home</div>
+      <div class="dt-badge">All tools</div>
+    </a>
+
+    <a href="/image-to-pdf.html" class="drawer-tool-card nav-item" data-path="/image-to-pdf.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg></div>
+      <div class="dt-name">Image to PDF</div>
+      <div class="dt-badge">In browser</div>
+    </a>
+
+    <a href="/pdf-to-jpg.html" class="drawer-tool-card nav-item" data-path="/pdf-to-jpg.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l4-4 4 4 4-6 4 6"/></svg></div>
+      <div class="dt-name">PDF to JPG</div>
+      <div class="dt-badge">On server</div>
+    </a>
+
+    <a href="/pdf-text-editor.html" class="drawer-tool-card nav-item" data-path="/pdf-text-editor.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+      <div class="dt-name">Edit PDF Text</div>
+      <div class="dt-badge">{% if not current_user %}Sign-in{% else %}On server{% endif %}</div>
+    </a>
+
+    <a href="/image-compress.html" class="drawer-tool-card nav-item" data-path="/image-compress.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m11-5v3a2 2 0 0 1-2 2h-3"/></svg></div>
+      <div class="dt-name">Image Compressor</div>
+      <div class="dt-badge">In browser</div>
+    </a>
+
+    <a href="/passport-photo.html" class="drawer-tool-card nav-item" data-path="/passport-photo.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 17c1-2 3-3 5-3s4 1 5 3"/></svg></div>
+      <div class="dt-name">Passport Photo</div>
+      <div class="dt-badge">In browser</div>
+    </a>
+
+    <a href="/image-resizer.html" class="drawer-tool-card nav-item" data-path="/image-resizer.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+      <div class="dt-name">Image Resizer</div>
+      <div class="dt-badge">In browser</div>
+    </a>
+
+    <a href="/protect-pdf.html" class="drawer-tool-card nav-item" data-path="/protect-pdf.html">
+      <div class="dt-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+      <div class="dt-name">Protect / Unlock PDF</div>
+      <div class="dt-badge">{% if not current_user %}Sign-in{% else %}On server{% endif %}</div>
+    </a>
+
+  </div>
+
+  <div class="drawer-section-label">Legal</div>
+  <div class="drawer-tool-grid" style="grid-template-columns: 1fr;">
+    <a href="/privacy-policy.html" class="drawer-tool-card nav-item" data-path="/privacy-policy.html">
+      <div class="dt-name" style="font-size: 12.5px;">Privacy Policy</div>
+    </a>
+    <a href="/terms-of-service.html" class="drawer-tool-card nav-item" data-path="/terms-of-service.html">
+      <div class="dt-name" style="font-size: 12.5px;">Terms of Service</div>
+    </a>
+  </div>
+</aside>
+
+<script>
+(function(){
+  var toggle = document.getElementById('menuToggle');
+  var overlay = document.getElementById('menuOverlay');
+  var drawer = document.getElementById('menuDrawer');
+  var closeBtn = document.getElementById('menuClose');
+
+  function openMenu() {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+  }
+  function closeMenu() {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  toggle.addEventListener('click', openMenu);
+  closeBtn.addEventListener('click', closeMenu);
+  overlay.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMenu(); });
+
+  // Highlight whichever tool card matches the current page
+  var here = window.location.pathname;
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    if (el.dataset.path === here) el.classList.add('active');
+  });
+})();
+</script>

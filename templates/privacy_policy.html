@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Privacy Policy — PDF ART</title>
+<meta name="description" content="How PDF ART handles your files and data. We don't store your uploaded PDFs or images — they're deleted immediately after your download.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 40px;
+  }
+
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 14px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 36px; }
+
+  .card {
+    background: var(--card); border-radius: 18px; padding: 40px; width: 100%; max-width: 700px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 18px; color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  .card h2:first-child { margin-top: 0; }
+  .card p, .card li { font-size: 14.5px; line-height: 1.7; color: var(--ink); margin-bottom: 10px; }
+  .card ul { padding-left: 20px; margin-bottom: 10px; }
+  .card a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .card a:hover { text-decoration: underline; }
+  .updated { font-size: 12.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; margin-bottom: 24px; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  footer .links { margin-top: 8px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  footer .links a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
+  footer .links a:hover { border-color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 30px; } .card { padding: 24px; } }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="eyebrow">Legal</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Privacy Policy</p>
+
+<div class="card">
+  <p class="updated">Last updated: August 2026</p>
+
+  <h2>Overview</h2>
+  <p>PDF ART ("we", "us", "our") provides free browser-based and server-assisted tools for working with PDFs and images. This page explains what data we collect, how we use it, and how long we keep it.</p>
+
+  <h2>Files you upload</h2>
+  <p>Most of our tools (Image to PDF, Image Compressor, Passport Photo, Image Resizer) run entirely inside your browser — your files never reach our servers.</p>
+  <p>A few tools (PDF to JPG, Edit PDF Text, Protect/Unlock PDF) need real server-side processing. When you use one of these:</p>
+  <ul>
+    <li>Your file is uploaded temporarily, processed, and sent back to you as a download.</li>
+    <li>We do not save a copy of your file to disk or any database.</li>
+    <li>The file is discarded from server memory immediately after your response is sent.</li>
+    <li>We do not open, read, or share the contents of your documents with any third party.</li>
+  </ul>
+
+  <h2>Account information (Google Sign-In)</h2>
+  <p>Some tools require signing in with Google. When you sign in, we receive your name, email address, and profile picture from Google and store them only in your browser session, so we can show you as signed in and let you use tools that require an account. We do not sell or share this information with third parties, and it is cleared when you sign out or your session expires.</p>
+
+  <h2>Cookies</h2>
+  <p>We use a session cookie to keep you signed in after using Google Sign-In. We do not use third-party advertising or tracking cookies at this time. If that changes, this policy will be updated.</p>
+
+  <h2>Analytics</h2>
+  <p>We may use privacy-respecting analytics (such as Google Analytics) to understand overall traffic, like which tools are used most. This data is aggregated and is not used to identify you personally.</p>
+
+  <h2>Third-party services</h2>
+  <p>We use Google Sign-In for authentication. Google's own privacy policy governs how Google handles your data during that process.</p>
+
+  <h2>Children's privacy</h2>
+  <p>PDF ART is not directed at children under 13, and we do not knowingly collect personal information from children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated "Last updated" date.</p>
+
+  <h2>Contact us</h2>
+  <p>Questions about this policy? Email us at <a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Privacy%20Policy">pdfarts.support@gmail.com</a>.</p>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+  <div class="links">
+    <a href="/privacy-policy.html">Privacy Policy</a>
+    <a href="/terms-of-service.html">Terms of Service</a>
+    <a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a>
+  </div>
+</footer>
+
+</body>
+</html>

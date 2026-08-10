@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Terms of Service — PDF ART</title>
+<meta name="description" content="The terms that govern your use of PDF ART's free PDF and photo tools.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 40px;
+  }
+
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 14px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 36px; }
+
+  .card {
+    background: var(--card); border-radius: 18px; padding: 40px; width: 100%; max-width: 700px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 18px; color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  .card h2:first-child { margin-top: 0; }
+  .card p, .card li { font-size: 14.5px; line-height: 1.7; color: var(--ink); margin-bottom: 10px; }
+  .card ul { padding-left: 20px; margin-bottom: 10px; }
+  .card a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .card a:hover { text-decoration: underline; }
+  .updated { font-size: 12.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; margin-bottom: 24px; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  footer .links { margin-top: 8px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  footer .links a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
+  footer .links a:hover { border-color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 30px; } .card { padding: 24px; } }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="eyebrow">Legal</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Terms of Service</p>
+
+<div class="card">
+  <p class="updated">Last updated: August 2026</p>
+
+  <h2>Acceptance of terms</h2>
+  <p>By using PDF ART, you agree to these Terms of Service. If you don't agree with any part of these terms, please don't use the site.</p>
+
+  <h2>What we provide</h2>
+  <p>PDF ART offers free tools to convert, edit, compress, resize, and secure PDFs and images. Some tools run entirely in your browser; others use our servers to process your file and immediately return the result, without keeping a copy.</p>
+
+  <h2>Acceptable use</h2>
+  <p>You agree to use PDF ART only for lawful purposes. You may not use our tools to:</p>
+  <ul>
+    <li>Process content you don't have the legal right to use or modify.</li>
+    <li>Upload malware, or attempt to disrupt, overload, or gain unauthorized access to our systems.</li>
+    <li>Use the service to create fraudulent, forged, or misleading documents.</li>
+    <li>Violate any applicable law or the rights of any third party.</li>
+  </ul>
+
+  <h2>Your content</h2>
+  <p>You retain full ownership of any file you upload. We don't claim any rights over your documents or images, and as explained in our <a href="/privacy-policy.html">Privacy Policy</a>, we don't keep copies of them after processing.</p>
+
+  <h2>No warranty</h2>
+  <p>PDF ART is provided "as is" and "as available," free of charge, without warranties of any kind, express or implied. We do our best to keep tools accurate and reliable, but we don't guarantee the service will be error-free, uninterrupted, or fit for any particular purpose — including legal, medical, or official document requirements (for example, passport photo specifications, which you should always double-check against the official issuing authority's rules).</p>
+
+  <h2>Limitation of liability</h2>
+  <p>To the fullest extent permitted by law, PDF ART and its creator are not liable for any indirect, incidental, or consequential damages arising from your use of, or inability to use, the service — including loss of data, loss of files, or rejected documents.</p>
+
+  <h2>Changes to the service</h2>
+  <p>We may add, change, or remove tools and features at any time, without prior notice.</p>
+
+  <h2>Changes to these terms</h2>
+  <p>We may update these Terms of Service from time to time. Continued use of the site after changes means you accept the updated terms.</p>
+
+  <h2>Contact us</h2>
+  <p>Questions about these terms? Email us at <a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Terms%20of%20Service">pdfarts.support@gmail.com</a>.</p>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+  <div class="links">
+    <a href="/privacy-policy.html">Privacy Policy</a>
+    <a href="/terms-of-service.html">Terms of Service</a>
+    <a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a>
+  </div>
+</footer>
+
+</body>
+</html>

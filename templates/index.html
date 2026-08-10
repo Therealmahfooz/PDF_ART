@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PDF ART — Merge Photos into a PDF</title>
 <meta name="description" content="Free online tool to convert JPG, PNG, and WEBP photos into a single PDF. No sign-up, no watermark, works right in your browser.">
-<!-- Google Analytics -->
+<!-- Google Analytics — commented out until a real Measurement ID is set.
+     Once you have one from analytics.google.com, uncomment this block and
+     replace BOTH "G-XXXXXXXXXX" occurrences with your real ID. -->
+<!--
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -13,6 +16,7 @@
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 </script>
+-->
 
 
 <!-- Home screen / app icon setup -->
@@ -29,6 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
 <style>
   :root {
     --paper: #EDEAE1;
@@ -185,6 +190,14 @@
   button[type="submit"]:hover:not(:disabled) { background: var(--accent-dark); }
   button[type="submit"]:active:not(:disabled) { transform: scale(0.98); }
   button[type="submit"]:disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; }
+
+  #progressWrap { margin-top: 18px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 600; }
+  #progressPercent { color: var(--accent); }
+  .progress-track { width: 100%; height: 8px; background: var(--paper-deep); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); border-radius: 999px; transition: width .2s ease; }
+  #errorBox { margin-top: 16px; padding: 12px 14px; border-radius: 8px; background: var(--accent-tint); border: 1px solid #E3C6C0; color: var(--accent-dark); font-size: 13.5px; }
+  .privacy-note { margin-top: 16px; text-align: center; font-size: 11.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; }
   footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
   footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
   footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
@@ -204,41 +217,7 @@
 </head>
 <body>
 
-<div class="toolnav-wrap">
-  <button type="button" class="toolnav-trigger" id="toolnavTrigger">
-    <span id="toolnavCurrent">Tools</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-  </button>
-  <nav class="toolnav" id="toolnavList">
-  <a href="/">Home</a>
-  <a href="/image-to-pdf.html" class="active">Image to PDF</a>
-  <a href="/pdf-to-jpg.html">PDF to JPG</a>
-  <a href="/pdf-text-editor.html">Edit PDF Text{% if not current_user %} 🔒{% endif %}</a>
-  <a href="/image-compress.html">Image Compressor</a>
-  <a href="/passport-photo.html">Passport Photo</a>
-  <a href="/image-resizer.html">Image Resizer</a>
-</nav>
-</div>
-<script>
-(function(){
-  var trigger = document.getElementById('toolnavTrigger');
-  var nav = document.getElementById('toolnavList');
-  var label = document.getElementById('toolnavCurrent');
-  var active = nav.querySelector('a.active');
-  if (active) label.textContent = active.textContent;
-  trigger.addEventListener('click', function(e){
-    e.stopPropagation();
-    var isOpen = nav.classList.toggle('open');
-    trigger.classList.toggle('open', isOpen);
-  });
-  document.addEventListener('click', function(e){
-    if (!trigger.contains(e.target) && !nav.contains(e.target)) {
-      nav.classList.remove('open');
-      trigger.classList.remove('open');
-    }
-  });
-})();
-</script>
+{% include '_nav.html' %}
 
 
 <div class="eyebrow">Photos → Document</div>
@@ -247,14 +226,14 @@
 <p class="tagline">Turn a handful of photos into one clean, ready-to-share PDF.</p>
 
 <div class="card">
-  <form id="pdfForm" action="/convert" method="POST" enctype="multipart/form-data">
+  <form id="pdfForm">
     <div class="card-label">Add your photos</div>
     <div id="dropzone">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
       <div class="primary-text">Drop photos here, or click to browse</div>
       <div class="secondary-text">JPG, PNG, and WEBP supported</div>
     </div>
-    <input type="file" id="fileInput" name="images[]" accept="image/*" multiple>
+    <input type="file" id="fileInput" name="images[]" accept="image/jpeg,image/png,image/webp" multiple>
 
     <div id="previewGrid"></div>
     <div class="hint" id="reorderHint" style="display:none;">Drag a photo to reorder the pages</div>
@@ -262,7 +241,7 @@
     <div class="options-row">
       <div class="field">
         <label>Page size</label>
-        <select name="page_size">
+        <select name="page_size" id="pageSizeSelect">
           <option value="A4">A4</option>
           <option value="Letter">Letter</option>
           <option value="Fit">Match photo size</option>
@@ -270,7 +249,7 @@
       </div>
       <div class="field">
         <label>Orientation</label>
-        <select name="orientation">
+        <select name="orientation" id="orientationSelect">
           <option value="P">Portrait</option>
           <option value="L">Landscape</option>
         </select>
@@ -286,7 +265,17 @@
     </div>
 
     <button type="submit" id="submitBtn" disabled>Bind into PDF</button>
+
+    <div id="progressWrap" style="display:none;">
+      <div class="progress-label">
+        <span id="progressText">Building your PDF…</span>
+        <span id="progressPercent"></span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <div id="errorBox" style="display:none;"></div>
   </form>
+  <div class="privacy-note">This tool runs entirely in your browser — your photos are never uploaded anywhere.</div>
 </div>
 
 <footer>
@@ -372,14 +361,154 @@ function updateFileInput() {
 
 document.getElementById('filenameInput').addEventListener('focus', function() { this.select(); });
 
-document.getElementById('pdfForm').addEventListener('submit', () => {
-  const nameInput = document.getElementById('filenameInput');
-  if (!nameInput.value.trim()) nameInput.value = 'PDF-ART-Document';
+const form = document.getElementById('pdfForm');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+const progressPercent = document.getElementById('progressPercent');
+const errorBox = document.getElementById('errorBox');
+const pageSizeSelect = document.getElementById('pageSizeSelect');
+const orientationSelect = document.getElementById('orientationSelect');
+
+function setProgress(pct, label) {
+  progressFill.style.width = pct + '%';
+  progressPercent.textContent = pct + '%';
+  if (label) progressText.textContent = label;
+}
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.style.display = 'block';
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = () => reject(new Error('Could not read ' + file.name));
+    img.src = url;
+  });
+}
+
+// Large phone photos (often 3000-4000px) make for a needlessly huge PDF and a
+// slow browser. Downscale to a sensible max dimension before adding it, the
+// same way the old server-side version did.
+const MAX_DIM = 1800;
+function prepareForPdf(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (Math.max(w, h) <= MAX_DIM) {
+    return { source: img, w, h };
+  }
+  const ratio = MAX_DIM / Math.max(w, h);
+  const newW = Math.max(1, Math.round(w * ratio));
+  const newH = Math.max(1, Math.round(h * ratio));
+  const canvas = document.createElement('canvas');
+  canvas.width = newW;
+  canvas.height = newH;
+  canvas.getContext('2d').drawImage(img, 0, 0, newW, newH);
+  return { source: canvas, w: newW, h: newH };
+}
+
+// mm <-> px at a fixed 96 DPI reference, matching how the page-size math is defined
+function pxToMm(px) { return px * 25.4 / 96; }
+
+async function buildPdf() {
+  if (filesArr.length === 0) return;
+
+  errorBox.style.display = 'none';
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Binding your PDF…';
-  // Plain form submit — Flask handles this directly, browser triggers the
-  // download automatically because the response is sent as an attachment.
-  setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = 'Bind into PDF'; }, 4000);
+  submitBtn.textContent = 'Building…';
+  progressWrap.style.display = 'block';
+  setProgress(0, 'Building your PDF…');
+
+  const pageSize = pageSizeSelect.value;   // 'A4' | 'Letter' | 'Fit'
+  const orientation = orientationSelect.value === 'L' ? 'l' : 'p';
+  const { jsPDF } = window.jspdf;
+
+  let pdf = null;
+  let processed = 0;
+  let failed = 0;
+
+  for (let i = 0; i < filesArr.length; i++) {
+    const file = filesArr[i];
+    let loaded;
+    try {
+      loaded = await loadImage(file);
+    } catch (e) {
+      failed++;
+      continue;
+    }
+
+    const { img, url } = loaded;
+    const { source, w, h } = prepareForPdf(img);
+    const imgWmm = pxToMm(w);
+    const imgHmm = pxToMm(h);
+    const dataFormat = /png$/i.test(file.type) ? 'PNG' : 'JPEG';
+
+    if (pageSize === 'Fit') {
+      const maxDim = 1000; // mm cap, keeps huge photos from producing an oversized page
+      const pw = Math.min(imgWmm, maxDim);
+      const ph = Math.min(imgHmm, maxDim);
+      const pageOrientation = imgWmm >= imgHmm ? 'l' : 'p';
+
+      if (!pdf) {
+        pdf = new jsPDF({ orientation: pageOrientation, unit: 'mm', format: [pw, ph] });
+      } else {
+        pdf.addPage([pw, ph], pageOrientation);
+      }
+      pdf.addImage(source, dataFormat, 0, 0, pw, ph);
+    } else {
+      if (!pdf) {
+        pdf = new jsPDF({ orientation, unit: 'mm', format: pageSize.toLowerCase() });
+      } else {
+        pdf.addPage(pageSize.toLowerCase(), orientation);
+      }
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pageW / imgWmm, pageH / imgHmm);
+      const drawW = imgWmm * ratio;
+      const drawH = imgHmm * ratio;
+      const x = (pageW - drawW) / 2;
+      const y = (pageH - drawH) / 2;
+      pdf.addImage(source, dataFormat, x, y, drawW, drawH);
+    }
+
+    URL.revokeObjectURL(url);
+    processed++;
+    setProgress(Math.round((processed / filesArr.length) * 100), 'Building your PDF…');
+    // Yield to the browser so the progress bar and preview stay responsive
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  if (processed === 0) {
+    progressWrap.style.display = 'none';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Bind into PDF';
+    showError('None of the selected photos could be read. Please try JPG, PNG, or WEBP images.');
+    return;
+  }
+
+  const nameInput = document.getElementById('filenameInput');
+  const filename = (nameInput.value.trim() || 'PDF-ART-Document') + '.pdf';
+
+  setProgress(100, 'Done!');
+  pdf.save(filename);
+
+  if (failed > 0) {
+    showError(`${failed} photo${failed > 1 ? 's' : ''} could not be read and ${failed > 1 ? 'were' : 'was'} skipped.`);
+  }
+
+  setTimeout(() => {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Bind into PDF';
+    progressWrap.style.display = 'none';
+  }, 1200);
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  buildPdf();
 });
 </script>
 

@@ -8,7 +8,10 @@
 <meta http-equiv="Expires" content="0">
 <title>PDF ART — Image Compressor</title>
 <meta name="description" content="Compress JPG, PNG, and WEBP images online for free. Shrink file size while keeping quality — processed right in your browser, nothing is uploaded.">
-<!-- Google Analytics -->
+<!-- Google Analytics — commented out until a real Measurement ID is set.
+     Once you have one from analytics.google.com, uncomment this block and
+     replace BOTH "G-XXXXXXXXXX" occurrences with your real ID. -->
+<!--
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -16,6 +19,7 @@
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 </script>
+-->
 
 
 <!-- Home screen / app icon setup -->
@@ -344,41 +348,7 @@
 </head>
 <body>
 
-<div class="toolnav-wrap">
-  <button type="button" class="toolnav-trigger" id="toolnavTrigger">
-    <span id="toolnavCurrent">Tools</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-  </button>
-  <nav class="toolnav" id="toolnavList">
-  <a href="/">Home</a>
-  <a href="/image-to-pdf.html">Image to PDF</a>
-  <a href="/pdf-to-jpg.html">PDF to JPG</a>
-  <a href="/pdf-text-editor.html">Edit PDF Text{% if not current_user %} 🔒{% endif %}</a>
-  <a href="/image-compress.html" class="active">Image Compressor</a>
-  <a href="/passport-photo.html">Passport Photo</a>
-  <a href="/image-resizer.html">Image Resizer</a>
-</nav>
-</div>
-<script>
-(function(){
-  var trigger = document.getElementById('toolnavTrigger');
-  var nav = document.getElementById('toolnavList');
-  var label = document.getElementById('toolnavCurrent');
-  var active = nav.querySelector('a.active');
-  if (active) label.textContent = active.textContent;
-  trigger.addEventListener('click', function(e){
-    e.stopPropagation();
-    var isOpen = nav.classList.toggle('open');
-    trigger.classList.toggle('open', isOpen);
-  });
-  document.addEventListener('click', function(e){
-    if (!trigger.contains(e.target) && !nav.contains(e.target)) {
-      nav.classList.remove('open');
-      trigger.classList.remove('open');
-    }
-  });
-})();
-</script>
+{% include '_nav.html' %}
 
 
 <div class="eyebrow">Shrink Without Losing Quality</div>

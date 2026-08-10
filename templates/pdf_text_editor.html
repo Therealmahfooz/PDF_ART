@@ -17,6 +17,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PDF ART">
 
+<!--
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -24,6 +25,7 @@
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 </script>
+-->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -140,47 +142,14 @@
   footer .contact { margin-top: 8px; }
   footer .contact a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
   footer .contact a:hover { border-color: var(--accent); }
+  .privacy-note { margin-top: 14px; text-align: center; font-size: 11.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; }
 
   @media (max-width: 480px) { h1.logo { font-size: 36px; } .card { padding: 24px; } }
 </style>
 </head>
 <body>
 
-<div class="toolnav-wrap">
-  <button type="button" class="toolnav-trigger" id="toolnavTrigger">
-    <span id="toolnavCurrent">Tools</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-  </button>
-  <nav class="toolnav" id="toolnavList">
-  <a href="/">Home</a>
-  <a href="/image-to-pdf.html">Image to PDF</a>
-  <a href="/pdf-to-jpg.html">PDF to JPG</a>
-  <a href="/pdf-text-editor.html" class="active">Edit PDF Text</a>
-  <a href="/image-compress.html">Image Compressor</a>
-  <a href="/passport-photo.html">Passport Photo</a>
-  <a href="/image-resizer.html">Image Resizer</a>
-</nav>
-</div>
-<script>
-(function(){
-  var trigger = document.getElementById('toolnavTrigger');
-  var nav = document.getElementById('toolnavList');
-  var label = document.getElementById('toolnavCurrent');
-  var active = nav.querySelector('a.active');
-  if (active) label.textContent = active.textContent;
-  trigger.addEventListener('click', function(e){
-    e.stopPropagation();
-    var isOpen = nav.classList.toggle('open');
-    trigger.classList.toggle('open', isOpen);
-  });
-  document.addEventListener('click', function(e){
-    if (!trigger.contains(e.target) && !nav.contains(e.target)) {
-      nav.classList.remove('open');
-      trigger.classList.remove('open');
-    }
-  });
-})();
-</script>
+{% include '_nav.html' %}
 
 <div class="eyebrow">Change The Words, Keep The Look</div>
 <img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
@@ -213,6 +182,7 @@
     </div>
 
     <div class="hint">Up to 20 pages per PDF. Each line of text becomes an editable field on the next screen.</div>
+    <div class="privacy-note">Your PDF is processed temporarily on our server to read and edit its text, then deleted immediately after your download.</div>
 
     <button type="submit" id="submitBtn" disabled>Extract Text to Edit</button>
   </form>
