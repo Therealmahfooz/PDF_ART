@@ -470,7 +470,7 @@ removeBgBtn.addEventListener('click', async () => {
     };
     newImg.src = dataUrl;
   } catch (err) {
-    alert('Background remove nahi ho paaya. Please internet connection check karke dobara try karein.');
+    alert('**Background removal could not be completed successfully. Please verify your internet connection and try again.**  .');
     removeBgBtn.disabled = false;
     removeBgBtn.textContent = 'Remove Background';
   }
