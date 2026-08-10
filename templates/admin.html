@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Admin — PDF ART</title>
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; padding: 32px 20px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 30px; color: var(--ink); }
+  h1.logo .dot { color: var(--accent); }
+  h1.logo .sub { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-left: 8px; letter-spacing: 0.02em; }
+  a.home-link { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 700; }
+  a.home-link:hover { text-decoration: underline; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px; box-shadow: var(--shadow);
+  }
+  .stat-card .num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 28px; color: var(--accent); }
+  .stat-card .label { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .panel h2 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 16px; }
+
+  .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .bar-row .bar-label { width: 160px; flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .bar-track { flex: 1; background: var(--paper-deep); border-radius: 999px; height: 20px; overflow: hidden; }
+  .bar-fill { background: linear-gradient(90deg, var(--accent), var(--accent-dark)); height: 100%; border-radius: 999px; min-width: 3%; }
+  .bar-count { width: 42px; text-align: right; flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  td { font-size: 13px; padding: 9px 10px; border-bottom: 1px solid var(--paper-deep); color: var(--ink); }
+  td.muted { color: var(--ink-soft); font-size: 12px; }
+  .table-wrap { overflow-x: auto; }
+  .empty-note { font-size: 13px; color: var(--ink-soft); font-style: italic; padding: 12px 0; }
+
+  .warn-note {
+    background: var(--accent-tint); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; font-size: 12.5px; color: var(--accent-dark); margin-bottom: 22px;
+  }
+
+  @media (max-width: 700px) {
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .bar-row .bar-label { width: 110px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top-row">
+    <h1 class="logo">PDF ART<span class="dot">.</span><span class="sub">ADMIN</span></h1>
+    <a class="home-link" href="/">&larr; Back to site</a>
+  </div>
+
+  {% if not admin_configured %}
+  <div class="warn-note">
+    Heads up: <strong>ADMIN_EMAILS</strong> isn't set as an environment variable yet, so anyone signed in could technically reach this page by guessing the URL. Set <code>ADMIN_EMAILS=you@gmail.com</code> in your environment to lock this down to just you.
+  </div>
+  {% endif %}
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num">{{ total_views }}</div><div class="label">Total Page Views</div></div>
+    <div class="stat-card"><div class="num">{{ views_today }}</div><div class="label">Views Today</div></div>
+    <div class="stat-card"><div class="num">{{ unique_users }}</div><div class="label">Signed-in Visitors</div></div>
+    <div class="stat-card"><div class="num">{{ total_logins }}</div><div class="label">Total Logins</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Tool Usage</h2>
+    {% if tool_counts %}
+      {% for row in tool_counts %}
+      <div class="bar-row">
+        <div class="bar-label">{{ row.tool }}</div>
+        <div class="bar-track"><div class="bar-fill" style="width: {{ (row.c / max_count * 100) | round(1) }}%;"></div></div>
+        <div class="bar-count">{{ row.c }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-note">No visits logged yet — numbers will show up as people use the site.</div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Recent Logins</h2>
+    <div class="table-wrap">
+    {% if recent_logins %}
+      <table>
+        <tr><th>Name</th><th>Email</th><th>When</th></tr>
+        {% for row in recent_logins %}
+        <tr>
+          <td>{{ row.name or '—' }}</td>
+          <td>{{ row.email }}</td>
+          <td class="muted">{{ row.ts[:19].replace('T', ' ') }} UTC</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <div class="empty-note">No logins recorded yet.</div>
+    {% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Recent Activity</h2>
+    <div class="table-wrap">
+    {% if recent_views %}
+      <table>
+        <tr><th>Tool</th><th>Visitor</th><th>When</th></tr>
+        {% for row in recent_views %}
+        <tr>
+          <td>{{ row.tool }}</td>
+          <td>{{ row.user_email or 'Anonymous' }}</td>
+          <td class="muted">{{ row.ts[:19].replace('T', ' ') }} UTC</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <div class="empty-note">No activity recorded yet.</div>
+    {% endif %}
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

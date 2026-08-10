@@ -44,6 +44,20 @@
   .drawer-logout { font-size: 11.5px; color: var(--ink-soft); text-decoration: none; font-weight: 600; }
   .drawer-logout:hover { color: var(--accent); }
 
+  .drawer-login-box {
+    margin: 14px 18px 0; padding: 14px 16px; background: var(--paper);
+    border: 1px solid var(--border); border-radius: 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .drawer-login-box .msg { font-size: 12.5px; color: var(--ink-soft); }
+  .drawer-login-btn {
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 8px 14px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
+    transition: background .15s;
+  }
+  .drawer-login-btn:hover { background: var(--accent-dark); }
+
   .drawer-section-label {
     font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft);
     font-weight: 700; padding: 18px 18px 10px;
@@ -89,6 +103,21 @@
       <div class="drawer-user-name">{{ current_user.name or current_user.email }}</div>
       <a href="/logout" class="drawer-logout">Sign out</a>
     </div>
+  </div>
+  {% else %}
+  <div class="drawer-login-box">
+    <span class="msg">Not signed in</span>
+    <a href="/login" class="drawer-login-btn">Sign in with Google</a>
+  </div>
+  {% endif %}
+
+  {% if is_admin %}
+  <div class="drawer-section-label">Admin</div>
+  <div class="drawer-tool-grid" style="grid-template-columns: 1fr;">
+    <a href="/admin" class="drawer-tool-card nav-item" data-path="/admin">
+      <div class="dt-name" style="font-size: 12.5px;">Dashboard</div>
+      <div class="dt-badge">Visits · logins · tool usage</div>
+    </a>
   </div>
   {% endif %}
 
