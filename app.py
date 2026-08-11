@@ -44,6 +44,7 @@ TOOL_LABELS = {
     '/image-compress.html': 'Image Compressor',
     '/passport-photo.html': 'Passport Photo',
     '/image-resizer.html': 'Image Resizer',
+    '/pdf/merge': 'Merge PDF',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -302,6 +303,56 @@ def image_resizer():
 @app.route('/pdf-to-jpg.html')
 def pdf_to_jpg_page():
     return render_template('pdf_to_jpg.html')
+
+
+@app.route('/pdf/merge')
+def pdf_merge_page():
+    return render_template('pdf_merge.html')
+
+
+@app.route('/merge-pdfs', methods=['POST'])
+def merge_pdfs():
+    files = [f for f in request.files.getlist('pdfs') if f and f.filename]
+    if len(files) < 2:
+        abort(400, description='Please add at least two PDF files to merge.')
+
+    merged = fitz.open()
+    try:
+        for f in files:
+            is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+            if not is_pdf:
+                abort(400, description=f'"{f.filename}" is not a PDF file. Please remove it and try again.')
+
+            try:
+                sub_doc = fitz.open(stream=f.read(), filetype='pdf')
+            except Exception:
+                abort(400, description=f'"{f.filename}" could not be read. It may be corrupted — please remove it and try again.')
+
+            if sub_doc.needs_pass:
+                sub_doc.close()
+                abort(400, description=f'"{f.filename}" is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try merging again.')
+
+            if sub_doc.page_count == 0:
+                sub_doc.close()
+                abort(400, description=f'"{f.filename}" has no pages.')
+
+            merged.insert_pdf(sub_doc)
+            sub_doc.close()
+
+        if merged.page_count == 0:
+            abort(400, description='No valid pages were found to merge.')
+
+        out_bytes = merged.tobytes()
+    finally:
+        merged.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Merged')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
 
 
 @app.route('/pdf-to-images', methods=['POST'])
