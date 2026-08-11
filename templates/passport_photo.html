@@ -412,6 +412,7 @@ changePhotoBtn.addEventListener('click', () => {
 // (cached by the browser afterwards), so the first click is slower.
 async function getRemoveBackgroundFn() {
   if (removeBackgroundFn) return removeBackgroundFn;
+  console.log('crossOriginIsolated (needed for fast multi-threaded processing):', window.crossOriginIsolated);
   const mod = await import('https://esm.sh/@imgly/background-removal@1.7.0');
   removeBackgroundFn = mod.removeBackground;
   return removeBackgroundFn;
