@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g
+from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g, make_response
 from authlib.integrations.flask_client import OAuth
 import fitz  # PyMuPDF
 
@@ -282,7 +282,16 @@ def image_compress():
 
 @app.route('/passport-photo.html')
 def passport_photo():
-    return render_template('passport_photo.html')
+    resp = make_response(render_template('passport_photo.html'))
+    # These headers make the page "cross-origin isolated", which lets the
+    # in-browser background-removal model (onnxruntime-web) use
+    # multi-threaded WASM and WebGPU instead of a single slow CPU thread.
+    # 'credentialless' (rather than 'require-corp') is used for the embedder
+    # policy so that third-party assets (Google Fonts, jsDelivr, esm.sh)
+    # keep loading normally without needing their own CORP headers.
+    resp.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    resp.headers['Cross-Origin-Embedder-Policy'] = 'credentialless'
+    return resp
 
 
 @app.route('/image-resizer.html')
