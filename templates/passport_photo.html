@@ -436,13 +436,27 @@ removeBgBtn.addEventListener('click', async () => {
   removeBgBtn.textContent = 'Loading AI model…';
   try {
     const removeBackground = await getRemoveBackgroundFn();
+    const MAX_DIM = 2000; // passport photos only need a few hundred px; no reason to feed a 12MP phone photo through the model
+    let bgInput = editImg.src;
+    if (img.naturalWidth > MAX_DIM || img.naturalHeight > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight);
+      const resizeCanvas = document.createElement('canvas');
+      resizeCanvas.width = Math.round(img.naturalWidth * scale);
+      resizeCanvas.height = Math.round(img.naturalHeight * scale);
+      resizeCanvas.getContext('2d').drawImage(img, 0, 0, resizeCanvas.width, resizeCanvas.height);
+      bgInput = await new Promise(resolve => resizeCanvas.toBlob(resolve, 'image/png'));
+    }
 
-    const resultBlob = await removeBackground(editImg.src, {
-      model: 'isnet_fp16', // cleaner edges around hair/face than the quantized model
+    const resultBlob = await removeBackground(bgInput, {
+      model: 'isnet_quint8', // smaller (~40MB) and noticeably faster than isnet_fp16; edges are still good for headshots
+      device: 'gpu', // uses WebGPU when the browser supports it (Chrome/Edge 113+) — can be 16-20x faster than CPU/WASM; auto-falls back to CPU otherwise
       progress: (key, current, total) => {
         if (key && key.startsWith('fetch:')) {
           const pct = total ? Math.round((current / total) * 100) : 0;
           removeBgBtn.textContent = `Downloading model… ${pct}%`;
+        } else if (key && key.startsWith('compute:')) {
+          const stage = key.split(':')[1] || '';
+          removeBgBtn.textContent = `Processing (${stage})… ${current + 1}/${total}`;
         } else {
           removeBgBtn.textContent = 'Removing background…';
         }
