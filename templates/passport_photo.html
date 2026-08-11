@@ -261,7 +261,6 @@
   <div class="contact"><a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a></div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 <script>
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -295,8 +294,7 @@ let offsetX = 0, offsetY = 0;
 let dragging = false, dragStartX = 0, dragStartY = 0, dragOrigX = 0, dragOrigY = 0;
 let bgRemoved = false;
 let currentBgColor = '#FFFFFF';
-let segmenter = null;
-let segmentResolve = null, segmentReject = null;
+let removeBackgroundFn = null; // lazy-loaded, cached across removals
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -408,26 +406,15 @@ changePhotoBtn.addEventListener('click', () => {
 });
 
 // --- Background removal (runs entirely in the browser, no upload to any server) ---
-function getSegmenter() {
-  if (segmenter) return segmenter;
-  segmenter = new SelfieSegmentation({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
-  });
-  segmenter.setOptions({ modelSelection: 0 });
-  segmenter.onResults((results) => {
-    if (segmentResolve) { segmentResolve(results); segmentResolve = null; segmentReject = null; }
-  });
-  return segmenter;
-}
-
-function segmentImage(imageEl) {
-  return new Promise((resolve, reject) => {
-    segmentResolve = resolve;
-    segmentReject = reject;
-    getSegmenter().send({ image: imageEl }).catch(err => {
-      if (segmentReject) { segmentReject(err); segmentResolve = null; segmentReject = null; }
-    });
-  });
+// Uses IMG.LY's ISNet-based model (@imgly/background-removal) — much cleaner
+// edges around hair/face than the old MediaPipe selfie-segmentation model,
+// and it's still actively maintained. First use downloads the ~40-80MB model
+// (cached by the browser afterwards), so the first click is slower.
+async function getRemoveBackgroundFn() {
+  if (removeBackgroundFn) return removeBackgroundFn;
+  const mod = await import('https://esm.sh/@imgly/background-removal@1.7.0');
+  removeBackgroundFn = mod.removeBackground;
+  return removeBackgroundFn;
 }
 
 function applyBgColor(color) {
@@ -446,18 +433,22 @@ customBgColor.addEventListener('input', () => applyBgColor(customBgColor.value))
 removeBgBtn.addEventListener('click', async () => {
   if (!img) return;
   removeBgBtn.disabled = true;
-  removeBgBtn.textContent = 'Removing background…';
+  removeBgBtn.textContent = 'Loading AI model…';
   try {
-    const results = await segmentImage(img);
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = 'source-over';
-    const dataUrl = canvas.toDataURL('image/png');
+    const removeBackground = await getRemoveBackgroundFn();
+
+    const resultBlob = await removeBackground(editImg.src, {
+      model: 'isnet_fp16', // cleaner edges around hair/face than the quantized model
+      progress: (key, current, total) => {
+        if (key && key.startsWith('fetch:')) {
+          const pct = total ? Math.round((current / total) * 100) : 0;
+          removeBgBtn.textContent = `Downloading model… ${pct}%`;
+        } else {
+          removeBgBtn.textContent = 'Removing background…';
+        }
+      },
+    });
+    const dataUrl = URL.createObjectURL(resultBlob);
 
     const newImg = new Image();
     newImg.onload = () => {
@@ -468,9 +459,13 @@ removeBgBtn.addEventListener('click', async () => {
       applyBgColor(currentBgColor);
       removeBgBtn.textContent = 'Background Removed ✓';
     };
+    newImg.onerror = () => {
+      throw new Error('Result image failed to load');
+    };
     newImg.src = dataUrl;
   } catch (err) {
-    alert('**Background removal could not be completed successfully. Please verify your internet connection and try again.**  .');
+    console.error('Background removal failed:', err);
+    alert('Background removal could not be completed. Please check your internet connection and try again.');
     removeBgBtn.disabled = false;
     removeBgBtn.textContent = 'Remove Background';
   }
