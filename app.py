@@ -1,9 +1,10 @@
-import base64
 import io
 import os
 import re
 import sqlite3
 import tempfile
+import time
+import uuid
 import zipfile
 from datetime import datetime, timezone
 from functools import wraps
@@ -196,6 +197,68 @@ def auth_callback():
 def logout():
     session.pop('user', None)
     return redirect(url_for('home'))
+
+
+# --- Temp storage for the PDF while the user edits its text ---
+# The uploaded PDF is written here once, and the edit form only carries a
+# short token referencing it — NOT the whole file re-encoded as base64.
+# Sending the full PDF back and forth as a base64 form field was the cause
+# of "Request Entity Too Large": base64 is ~33% bigger than the original,
+# and x-www-form-urlencoded encoding of the base64 alphabet (+, /, =) adds
+# another ~30-40% on top, so even a modest PDF could blow past the upload
+# size limit once it made the round trip.
+PDF_EDIT_TMP_DIR = os.path.join(tempfile.gettempdir(), 'pdfart_edits')
+os.makedirs(PDF_EDIT_TMP_DIR, exist_ok=True)
+PDF_EDIT_TOKEN_RE = re.compile(r'^[a-f0-9]{32}$')
+PDF_EDIT_MAX_AGE_SECONDS = 3600  # 1 hour — plenty for someone to finish editing
+
+
+def _cleanup_old_edit_temp_files():
+    try:
+        now = time.time()
+        for fname in os.listdir(PDF_EDIT_TMP_DIR):
+            fpath = os.path.join(PDF_EDIT_TMP_DIR, fname)
+            try:
+                if now - os.path.getmtime(fpath) > PDF_EDIT_MAX_AGE_SECONDS:
+                    os.unlink(fpath)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def store_pdf_for_editing(pdf_bytes):
+    """Writes the uploaded PDF to a temp file and returns a token for it."""
+    _cleanup_old_edit_temp_files()
+    token = uuid.uuid4().hex
+    with open(os.path.join(PDF_EDIT_TMP_DIR, token + '.pdf'), 'wb') as f:
+        f.write(pdf_bytes)
+    return token
+
+
+def load_pdf_for_editing(token):
+    """Reads back the PDF bytes for a token created by store_pdf_for_editing.
+    Returns None if the token is invalid, expired, or unknown."""
+    if not token or not PDF_EDIT_TOKEN_RE.match(token):
+        return None
+    fpath = os.path.join(PDF_EDIT_TMP_DIR, token + '.pdf')
+    if not os.path.isfile(fpath):
+        return None
+    try:
+        with open(fpath, 'rb') as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def discard_pdf_edit_token(token):
+    if not token or not PDF_EDIT_TOKEN_RE.match(token):
+        return
+    fpath = os.path.join(PDF_EDIT_TMP_DIR, token + '.pdf')
+    try:
+        os.unlink(fpath)
+    except OSError:
+        pass
 
 
 def safe_filename(raw, fallback):
@@ -597,11 +660,11 @@ def extract_pdf_text():
     if not blocks:
         abort(400, description='No editable text was found in this PDF — it may be a scanned or image-only document.')
 
-    pdf_b64 = base64.b64encode(pdf_bytes).decode('ascii')
+    pdf_token = store_pdf_for_editing(pdf_bytes)
     return render_template(
         'pdf_text_edit_result.html',
         blocks=blocks,
-        pdf_b64=pdf_b64,
+        pdf_token=pdf_token,
         page_count=page_count,
         truncated=page_count > max_pages,
     )
@@ -610,9 +673,11 @@ def extract_pdf_text():
 @app.route('/apply-pdf-edits', methods=['POST'])
 @login_required
 def apply_pdf_edits():
-    pdf_b64 = request.form.get('pdf_data', '')
+    pdf_token = request.form.get('pdf_token', '')
+    pdf_bytes = load_pdf_for_editing(pdf_token)
+    if pdf_bytes is None:
+        abort(400, description='The original PDF could not be found — it may have expired (edits must be saved within an hour). Please upload the file again.')
     try:
-        pdf_bytes = base64.b64decode(pdf_b64)
         doc = fitz.open(stream=pdf_bytes, filetype='pdf')
     except Exception:
         abort(400, description='The original PDF data was lost — please upload the file again.')
@@ -704,6 +769,7 @@ def apply_pdf_edits():
                 os.unlink(f)
             except OSError:
                 pass
+        discard_pdf_edit_token(pdf_token)
 
     output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Edited')
     return send_file(
