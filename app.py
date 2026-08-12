@@ -643,6 +643,19 @@ def extract_pdf_text():
                 r = (color_int >> 16) & 255
                 g = (color_int >> 8) & 255
                 b = color_int & 255
+
+                # Some PDFs (e.g. ID-card / form layouts) print certain
+                # fields sideways along a margin. `line['dir']` is the
+                # writing-direction unit vector: (1,0) horizontal,
+                # (0,-1)/(0,1) vertical, (-1,0) upside-down. We snap it to
+                # the nearest 90° so re-inserted text keeps the original
+                # line's orientation instead of always being horizontal.
+                dx, dy = line.get('dir', (1.0, 0.0))
+                if abs(dy) > abs(dx):
+                    rotate = 90 if dy < 0 else 270
+                else:
+                    rotate = 180 if dx < 0 else 0
+
                 blocks.append({
                     'id': idx,
                     'page': page_num,
@@ -652,6 +665,7 @@ def extract_pdf_text():
                     'size': round(first.get('size', 11), 2),
                     'font': first.get('font', 'helv'),
                     'color': f"{r},{g},{b}",
+                    'rotate': rotate,
                 })
                 idx += 1
 
@@ -697,6 +711,7 @@ def apply_pdf_edits():
                     'size': float(request.form.get(f'size_{bid}', '11')),
                     'font': request.form.get(f'font_{bid}', 'helv'),
                     'color': request.form.get(f'color_{bid}', '0,0,0'),
+                    'rotate': int(request.form.get(f'rotate_{bid}', '0')) if request.form.get(f'rotate_{bid}', '0') in ('0', '90', '180', '270') else 0,
                 })
             except (ValueError, TypeError):
                 continue
@@ -723,11 +738,19 @@ def apply_pdf_edits():
                     r, g, b = 0, 0, 0
 
                 fontname, fontfile = resolve_font(doc, page_num, e['font'], tmp_font_files, font_cache)
+                rotate = e.get('rotate', 0)
 
-                # If the new text is wider than the original line's box,
+                # For sideways lines (rotate 90/270) text runs along the
+                # box's HEIGHT, not its width — so that's the dimension to
+                # fit the text into.
+                if rotate in (90, 270):
+                    box_span = max(e['y1'] - e['y0'], 1)
+                else:
+                    box_span = max(e['x1'] - e['x0'], 1)
+
+                # If the new text is longer than the original line's box,
                 # shrink the font size just enough to fit (down to a floor)
                 # instead of letting it spill over neighbouring text.
-                box_width = max(e['x1'] - e['x0'], 1)
                 fontsize = e['size']
                 min_fontsize = max(e['size'] * 0.5, 5)
                 try:
@@ -735,30 +758,45 @@ def apply_pdf_edits():
                         text_width = fitz.get_text_length(
                             e['text'], fontname=fontname, fontsize=fontsize, fontfile=fontfile
                         )
-                        if text_width <= box_width or fontsize <= min_fontsize:
+                        if text_width <= box_span or fontsize <= min_fontsize:
                             break
-                        fontsize = max(fontsize * (box_width / text_width) * 0.98, min_fontsize)
+                        fontsize = max(fontsize * (box_span / text_width) * 0.98, min_fontsize)
                 except Exception:
                     fontsize = e['size']
 
-                baseline_y = e['y1'] - (fontsize * 0.15)
+                # The insertion point's meaning depends on rotation: it
+                # always sits on the "far" edge of the box in the direction
+                # text is written FROM, offset by the font's descent along
+                # the perpendicular axis (same offset PyMuPDF itself applies
+                # when it writes rotated text).
+                offset = fontsize * 0.15
+                if rotate == 90:
+                    point = fitz.Point(e['x1'] - offset, e['y1'])
+                elif rotate == 180:
+                    point = fitz.Point(e['x1'], e['y0'] + offset)
+                elif rotate == 270:
+                    point = fitz.Point(e['x0'] + offset, e['y0'])
+                else:
+                    point = fitz.Point(e['x0'], e['y1'] - offset)
 
                 try:
                     page.insert_text(
-                        fitz.Point(e['x0'], baseline_y),
+                        point,
                         e['text'],
                         fontsize=fontsize,
                         fontname=fontname,
                         fontfile=fontfile,
                         color=(r, g, b),
+                        rotate=rotate,
                     )
                 except Exception:
                     page.insert_text(
-                        fitz.Point(e['x0'], baseline_y),
+                        point,
                         e['text'],
                         fontsize=fontsize,
                         fontname='helv',
                         color=(r, g, b),
+                        rotate=rotate,
                     )
 
         out_bytes = doc.tobytes()
