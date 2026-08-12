@@ -204,11 +204,21 @@ def safe_filename(raw, fallback):
     return (name or fallback) + '.pdf'
 
 
-def resolve_font(doc, page_num, font_label, tmp_files):
+def resolve_font(doc, page_num, font_label, tmp_files, font_cache=None):
     """Try to reuse the PDF's own embedded font so edited text matches the
     original as closely as possible. Falls back to the closest standard
     PDF font (Helvetica / Times / Courier, with bold/italic detected from
-    the font's name) when the original isn't embedded or can't be reused."""
+    the font's name) when the original isn't embedded or can't be reused.
+
+    font_cache (optional dict) should be shared across all calls made while
+    editing a single document. Each distinct embedded font gets its own
+    alias (customfont0, customfont1, ...) so that PyMuPDF doesn't reuse the
+    bytes of a previously-registered font when a *different* font is asked
+    for under the same name."""
+    cache_key = (page_num, font_label)
+    if font_cache is not None and cache_key in font_cache:
+        return font_cache[cache_key]
+
     try:
         page = doc[page_num]
         for f in page.get_fonts(full=True):
@@ -222,7 +232,13 @@ def resolve_font(doc, page_num, font_label, tmp_files):
                     tmp.write(buffer)
                     tmp.close()
                     tmp_files.append(tmp.name)
-                    return 'customfont', tmp.name
+                    # Unique alias per distinct embedded font so multiple
+                    # different fonts on the same page/doc don't collide.
+                    alias = f'customfont{len(tmp_files) - 1}'
+                    result = (alias, tmp.name)
+                    if font_cache is not None:
+                        font_cache[cache_key] = result
+                    return result
     except Exception:
         pass
 
@@ -244,7 +260,10 @@ def resolve_font(doc, page_num, font_label, tmp_files):
         ('courier', False, False): 'cour', ('courier', True, False): 'cobo',
         ('courier', False, True): 'coit', ('courier', True, True): 'cobi',
     }
-    return mapping.get((base, bold, italic), 'helv'), None
+    result = (mapping.get((base, bold, italic), 'helv'), None)
+    if font_cache is not None:
+        font_cache[cache_key] = result
+    return result
 
 
 @app.route('/')
@@ -618,6 +637,7 @@ def apply_pdf_edits():
                 continue
 
     tmp_font_files = []
+    font_cache = {}
     try:
         for page_num, edits in edits_by_page.items():
             if page_num >= len(doc):
@@ -637,14 +657,32 @@ def apply_pdf_edits():
                 except Exception:
                     r, g, b = 0, 0, 0
 
-                fontname, fontfile = resolve_font(doc, page_num, e['font'], tmp_font_files)
-                baseline_y = e['y1'] - (e['size'] * 0.15)
+                fontname, fontfile = resolve_font(doc, page_num, e['font'], tmp_font_files, font_cache)
+
+                # If the new text is wider than the original line's box,
+                # shrink the font size just enough to fit (down to a floor)
+                # instead of letting it spill over neighbouring text.
+                box_width = max(e['x1'] - e['x0'], 1)
+                fontsize = e['size']
+                min_fontsize = max(e['size'] * 0.5, 5)
+                try:
+                    for _ in range(12):
+                        text_width = fitz.get_text_length(
+                            e['text'], fontname=fontname, fontsize=fontsize, fontfile=fontfile
+                        )
+                        if text_width <= box_width or fontsize <= min_fontsize:
+                            break
+                        fontsize = max(fontsize * (box_width / text_width) * 0.98, min_fontsize)
+                except Exception:
+                    fontsize = e['size']
+
+                baseline_y = e['y1'] - (fontsize * 0.15)
 
                 try:
                     page.insert_text(
                         fitz.Point(e['x0'], baseline_y),
                         e['text'],
-                        fontsize=e['size'],
+                        fontsize=fontsize,
                         fontname=fontname,
                         fontfile=fontfile,
                         color=(r, g, b),
@@ -653,7 +691,7 @@ def apply_pdf_edits():
                     page.insert_text(
                         fitz.Point(e['x0'], baseline_y),
                         e['text'],
-                        fontsize=e['size'],
+                        fontsize=fontsize,
                         fontname='helv',
                         color=(r, g, b),
                     )
