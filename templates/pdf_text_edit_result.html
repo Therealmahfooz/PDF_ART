@@ -98,7 +98,7 @@
 {% endif %}
 
 <form id="editForm" action="/apply-pdf-edits" method="POST">
-  <input type="hidden" name="pdf_data" value="{{ pdf_b64 }}">
+  <input type="hidden" name="pdf_token" value="{{ pdf_token }}">
 
   {% set current_page = namespace(value=-1) %}
   {% for block in blocks %}
