@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PDF ART — Remove Logo from Photo</title>
+<meta name="description" content="Paint over a logo or watermark on a photo and remove it right in your browser upload — no design skills needed.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 24px;
+  }
+
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 15px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 32px; max-width: 460px; }
+
+  .card { background: var(--card); border-radius: 18px; padding: 30px; width: 100%; max-width: 680px; box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 20px; }
+  .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
+
+  #dropzone {
+    border: 1.5px dashed #C7BEA6;
+    background: repeating-linear-gradient(135deg, rgba(140,47,57,0.02) 0 2px, transparent 2px 14px);
+    border-radius: 14px; padding: 40px 20px; text-align: center; color: var(--ink-soft);
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  #dropzone svg { width: 34px; height: 34px; margin-bottom: 12px; stroke: var(--ink-soft); }
+  #dropzone.dragover svg { stroke: var(--accent); }
+  #dropzone .primary-text { font-family: 'Fraunces', serif; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
+  #dropzone .secondary-text { font-size: 13px; }
+  #fileInput { display: none; }
+
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 16px; font-style: italic; font-family: 'Fraunces', serif; }
+  .privacy-note { margin-top: 14px; text-align: center; font-size: 11.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; }
+
+  /* --- editor (shown after a photo is chosen) --- */
+  #editorWrap { display: none; }
+
+  .canvas-toolbar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 14px;
+  }
+  .brush-control { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
+  .brush-control input[type="range"] { width: 110px; accent-color: var(--accent); }
+  .brush-preview {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+    opacity: 0.55; flex-shrink: 0; transition: width .1s, height .1s;
+  }
+  .toolbar-btn {
+    margin-left: auto; background: var(--card); border: 1px solid var(--border); color: var(--ink);
+    font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  #canvasStage {
+    position: relative; width: 100%; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border); background: repeating-conic-gradient(#F4F2EA 0% 25%, #ECE9DF 0% 50%) 50% / 20px 20px;
+    display: flex; align-items: center; justify-content: center; touch-action: none;
+  }
+  #drawCanvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+
+  .editor-instructions {
+    font-size: 13px; color: var(--ink-soft); text-align: center; margin: 12px 0 4px; line-height: 1.5;
+  }
+  .editor-instructions strong { color: var(--ink); }
+
+  .change-photo-link { display: block; text-align: center; margin-top: 14px; font-size: 12.5px; color: var(--ink-soft); text-decoration: none; }
+  .change-photo-link:hover { color: var(--accent); }
+
+  .filename-field { margin-top: 20px; }
+  .filename-field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+  .filename-wrap { display: flex; align-items: center; border: 1px solid var(--border); background: var(--paper); border-radius: 8px; overflow: hidden; max-width: 320px; }
+  .filename-wrap input { flex: 1; border: none; background: transparent; padding: 11px 0 11px 12px; font-size: 14px; color: var(--ink); font-family: 'Inter', sans-serif; min-width: 0; }
+  .filename-wrap input:focus { outline: none; }
+  .filename-wrap .ext { padding: 11px 12px 11px 4px; font-size: 14px; color: var(--ink-soft); }
+
+  button[type="submit"] {
+    width: 100%; margin-top: 20px; padding: 15px; border-radius: 10px; font-size: 14px;
+    letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    transition: background .15s, transform .08s; box-shadow: 0 6px 16px rgba(140,47,57,0.28);
+  }
+  button[type="submit"]:hover:not(:disabled) { background: var(--accent-dark); }
+  button[type="submit"]:active:not(:disabled) { transform: scale(0.98); }
+  button[type="submit"]:disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  footer .contact { margin-top: 8px; }
+  footer .contact a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
+  footer .contact a:hover { border-color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 32px; } .card { padding: 22px; } }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="eyebrow">Paint It Out</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Paint over a logo or watermark on a photo, and we'll blend it away.</p>
+
+<div class="card">
+
+  <form id="removeForm" action="/remove-logo" method="POST" enctype="multipart/form-data">
+
+    <div id="uploadStep">
+      <div class="card-label">Add your photo</div>
+      <div id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+        <div class="primary-text">Drop a photo here, or click to browse</div>
+        <div class="secondary-text">JPG, PNG, or WEBP</div>
+      </div>
+      <input type="file" id="fileInput" name="image" accept="image/*">
+      <div class="hint">Works best when the logo sits over a fairly plain or repeating background.</div>
+      <div class="privacy-note">Your photo is processed temporarily on our server to remove the marked area, then deleted immediately after your download.</div>
+    </div>
+
+    <div id="editorWrap">
+      <div class="card-label">Mark the logo</div>
+
+      <div class="canvas-toolbar">
+        <div class="brush-control">
+          Brush
+          <input type="range" id="brushSize" min="8" max="60" value="22">
+          <span class="brush-preview" id="brushPreview"></span>
+        </div>
+        <button type="button" class="toolbar-btn" id="clearMaskBtn">Clear marks</button>
+      </div>
+
+      <div id="canvasStage">
+        <canvas id="drawCanvas"></canvas>
+      </div>
+
+      <div class="editor-instructions">Drag over the logo to paint it red — <strong>fully cover it</strong>, a little extra around the edge is fine.</div>
+      <a href="#" class="change-photo-link" id="changePhotoLink">&larr; Choose a different photo</a>
+
+      <div class="filename-field">
+        <label>File name</label>
+        <div class="filename-wrap">
+          <input type="text" name="filename" value="PDF-ART-Logo-Removed" maxlength="80">
+          <span class="ext">.png</span>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" disabled>Remove Logo</button>
+    </div>
+
+  </form>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+  <div class="contact"><a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a></div>
+</footer>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const uploadStep = document.getElementById('uploadStep');
+const editorWrap = document.getElementById('editorWrap');
+const canvasStage = document.getElementById('canvasStage');
+const drawCanvas = document.getElementById('drawCanvas');
+const drawCtx = drawCanvas.getContext('2d');
+const brushSize = document.getElementById('brushSize');
+const brushPreview = document.getElementById('brushPreview');
+const clearMaskBtn = document.getElementById('clearMaskBtn');
+const changePhotoLink = document.getElementById('changePhotoLink');
+const submitBtn = document.getElementById('submitBtn');
+const form = document.getElementById('removeForm');
+
+// Off-screen mask canvas: black background, white where the user paints.
+// This — not the visible canvas — is what gets sent to the server.
+const maskCanvas = document.createElement('canvas');
+const maskCtx = maskCanvas.getContext('2d');
+
+let sourceImage = null;
+let hasMarks = false;
+let drawing = false;
+
+function updateBrushPreview() {
+  const px = Math.max(10, Math.min(40, Number(brushSize.value)));
+  brushPreview.style.width = px + 'px';
+  brushPreview.style.height = px + 'px';
+}
+brushSize.addEventListener('input', updateBrushPreview);
+updateBrushPreview();
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+function loadFile(file) {
+  if (!file.type.startsWith('image/')) return;
+
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  fileInput.files = dt.files;
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => setupCanvas(img);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setupCanvas(img) {
+  sourceImage = img;
+
+  // Display at a manageable size, but keep the mask canvas at the SAME
+  // resolution as what's displayed — the server upscales it to match the
+  // photo's real resolution, so this only affects painting precision.
+  const maxW = Math.min(window.innerWidth - 80, 620);
+  const scale = Math.min(1, maxW / img.naturalWidth);
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+
+  drawCanvas.width = w;
+  drawCanvas.height = h;
+  maskCanvas.width = w;
+  maskCanvas.height = h;
+
+  drawCtx.drawImage(img, 0, 0, w, h);
+  maskCtx.fillStyle = '#000';
+  maskCtx.fillRect(0, 0, w, h);
+
+  hasMarks = false;
+  submitBtn.disabled = true;
+
+  uploadStep.style.display = 'none';
+  editorWrap.style.display = 'block';
+}
+
+function canvasPointFromEvent(e) {
+  const rect = drawCanvas.getBoundingClientRect();
+  const scaleX = drawCanvas.width / rect.width;
+  const scaleY = drawCanvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+function paintAt(x, y) {
+  const r = Number(brushSize.value) * (drawCanvas.width / drawCanvas.getBoundingClientRect().width || 1);
+
+  drawCtx.beginPath();
+  drawCtx.fillStyle = 'rgba(140, 47, 57, 0.55)';
+  drawCtx.arc(x, y, r, 0, Math.PI * 2);
+  drawCtx.fill();
+
+  maskCtx.beginPath();
+  maskCtx.fillStyle = '#fff';
+  maskCtx.arc(x, y, r, 0, Math.PI * 2);
+  maskCtx.fill();
+
+  hasMarks = true;
+  submitBtn.disabled = false;
+}
+
+function startDraw(e) {
+  e.preventDefault();
+  drawing = true;
+  const p = canvasPointFromEvent(e);
+  paintAt(p.x, p.y);
+}
+function moveDraw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = canvasPointFromEvent(e);
+  paintAt(p.x, p.y);
+}
+function endDraw() { drawing = false; }
+
+drawCanvas.addEventListener('mousedown', startDraw);
+drawCanvas.addEventListener('mousemove', moveDraw);
+window.addEventListener('mouseup', endDraw);
+drawCanvas.addEventListener('touchstart', startDraw, { passive: false });
+drawCanvas.addEventListener('touchmove', moveDraw, { passive: false });
+window.addEventListener('touchend', endDraw);
+
+clearMaskBtn.addEventListener('click', () => {
+  if (!sourceImage) return;
+  drawCtx.drawImage(sourceImage, 0, 0, drawCanvas.width, drawCanvas.height);
+  maskCtx.fillStyle = '#000';
+  maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+  hasMarks = false;
+  submitBtn.disabled = true;
+});
+
+changePhotoLink.addEventListener('click', e => {
+  e.preventDefault();
+  fileInput.value = '';
+  sourceImage = null;
+  editorWrap.style.display = 'none';
+  uploadStep.style.display = 'block';
+});
+
+function dataURLtoBlob(dataurl) {
+  const parts = dataurl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+  return new Blob([u8arr], { type: mime });
+}
+
+form.addEventListener('submit', function (e) {
+  if (!hasMarks) { e.preventDefault(); return; }
+  e.preventDefault();
+
+  const maskBlob = dataURLtoBlob(maskCanvas.toDataURL('image/png'));
+  const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
+
+  let maskInput = document.getElementById('maskInput');
+  if (!maskInput) {
+    maskInput = document.createElement('input');
+    maskInput.type = 'file';
+    maskInput.name = 'mask';
+    maskInput.id = 'maskInput';
+    maskInput.style.display = 'none';
+    form.appendChild(maskInput);
+  }
+  const dt = new DataTransfer();
+  dt.items.add(maskFile);
+  maskInput.files = dt.files;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Removing logo…';
+  form.submit();
+});
+</script>
+
+</body>
+</html>
