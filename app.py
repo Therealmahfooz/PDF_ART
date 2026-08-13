@@ -15,6 +15,20 @@ from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g, make_response
 from authlib.integrations.flask_client import OAuth
 import fitz  # PyMuPDF
+
+# --- Compatibility shim for pdf2docx ---
+# pdf2docx (and some of its dependencies) still do `from collections import
+# Iterable`, which was removed in Python 3.10 (it now only lives in
+# collections.abc). Rather than pinning the whole app to an old, soon-to-be
+# unsupported Python version just for this one library, we patch the
+# `collections` module here — before pdf2docx is imported — so that old
+# import style keeps working no matter which Python version Render uses.
+import collections
+import collections.abc
+for _name in ('Iterable', 'Mapping', 'MutableMapping', 'Sequence', 'Callable'):
+    if not hasattr(collections, _name):
+        setattr(collections, _name, getattr(collections.abc, _name))
+
 from pdf2docx import Converter  # used by the new "PDF to Word/Text" tool
 
 load_dotenv()  # loads GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / FLASK_SECRET_KEY from a local .env file, if present
