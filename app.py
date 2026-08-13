@@ -9,10 +9,13 @@ import zipfile
 from datetime import datetime, timezone
 from functools import wraps
 
+import cv2
+import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g, make_response
 from authlib.integrations.flask_client import OAuth
 import fitz  # PyMuPDF
+from pdf2docx import Converter  # used by the new "PDF to Word/Text" tool
 
 load_dotenv()  # loads GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / FLASK_SECRET_KEY from a local .env file, if present
 
@@ -46,6 +49,8 @@ TOOL_LABELS = {
     '/passport-photo.html': 'Passport Photo',
     '/image-resizer.html': 'Image Resizer',
     '/pdf/merge': 'Merge PDF',
+    '/logo-remover.html': 'Logo Remover',
+    '/pdf-to-word.html': 'PDF to Word/Text',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -265,6 +270,21 @@ def safe_filename(raw, fallback):
     name = re.sub(r'[^A-Za-z0-9 _\-]', '', (raw or '').strip())
     name = name.strip()
     return (name or fallback) + '.pdf'
+
+
+def safe_image_filename(raw, fallback, ext='.png'):
+    name = re.sub(r'[^A-Za-z0-9 _\-]', '', (raw or '').strip())
+    name = name.strip()
+    return (name or fallback) + ext
+
+
+def safe_doc_basename(raw, fallback):
+    """Like safe_filename/safe_image_filename, but returns just the
+    sanitized base name (no extension) so the caller can append .docx
+    or .txt depending on what the user chose."""
+    name = re.sub(r'[^A-Za-z0-9 _\-]', '', (raw or '').strip())
+    name = name.strip()
+    return name or fallback
 
 
 def resolve_font(doc, page_num, font_label, tmp_files, font_cache=None):
@@ -815,6 +835,153 @@ def apply_pdf_edits():
         mimetype='application/pdf',
         as_attachment=True,
         download_name=output_name,
+    )
+
+
+@app.route('/logo-remover.html')
+def logo_remover_page():
+    return render_template('logo_remover.html')
+
+
+@app.route('/remove-logo', methods=['POST'])
+def remove_logo():
+    img_file = request.files.get('image')
+    mask_file = request.files.get('mask')
+
+    if not img_file or img_file.filename == '':
+        abort(400, description='No photo was received. Please go back and choose an image.')
+    if not mask_file or mask_file.filename == '':
+        abort(400, description='No logo area was marked. Please paint over the logo before removing it.')
+
+    is_image = (img_file.mimetype or '').startswith('image/') or re.search(
+        r'\.(jpe?g|png|webp|bmp)$', img_file.filename, re.IGNORECASE
+    )
+    if not is_image:
+        abort(400, description='Please upload a valid photo (JPG, PNG, WEBP, or BMP).')
+
+    img_bytes = img_file.read()
+    mask_bytes = mask_file.read()
+
+    img_arr = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+    if img is None:
+        abort(400, description='This file could not be read as an image. It may be corrupted or an unsupported format.')
+
+    mask_arr = np.frombuffer(mask_bytes, np.uint8)
+    mask = cv2.imdecode(mask_arr, cv2.IMREAD_GRAYSCALE)
+    if mask is None:
+        abort(400, description='The marked logo area could not be read. Please try marking it again.')
+
+    # The mask is painted on a canvas that may be a scaled-down preview of
+    # the photo, so stretch it back up to the photo's real resolution
+    # before using it — nearest-neighbour keeps the painted edges crisp
+    # instead of blurring them into semi-transparent grey.
+    if mask.shape[:2] != img.shape[:2]:
+        mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+    # Anything painted (even lightly, from anti-aliased brush edges) counts
+    # as "remove this", then grow the marked area slightly so the very
+    # edge of the logo — which the user may not have painted perfectly —
+    # gets covered too.
+    _, mask_bin = cv2.threshold(mask, 20, 255, cv2.THRESH_BINARY)
+    if not np.any(mask_bin):
+        abort(400, description='No logo area was marked. Please paint over the logo before removing it.')
+    kernel = np.ones((5, 5), np.uint8)
+    mask_bin = cv2.dilate(mask_bin, kernel, iterations=2)
+
+    result = cv2.inpaint(img, mask_bin, inpaintRadius=7, flags=cv2.INPAINT_TELEA)
+
+    ok, buffer = cv2.imencode('.png', result)
+    if not ok:
+        abort(400, description='Something went wrong producing the result image. Please try again.')
+
+    output_name = safe_image_filename(request.form.get('filename'), 'PDF-ART-Logo-Removed', '.png')
+    return send_file(
+        io.BytesIO(buffer.tobytes()),
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/pdf-to-word.html')
+def pdf_to_word_page():
+    return render_template('pdf_to_word.html')
+
+
+@app.route('/convert-pdf-to-word', methods=['POST'])
+def convert_pdf_to_word():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    out_format = request.form.get('format', 'docx').lower()
+    if out_format not in ('docx', 'txt'):
+        out_format = 'docx'
+
+    pdf_bytes = f.read()
+
+    try:
+        check_doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if check_doc.needs_pass:
+        check_doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    if check_doc.page_count == 0:
+        check_doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    base_name = safe_doc_basename(request.form.get('filename'), 'PDF-ART-Converted')
+
+    if out_format == 'txt':
+        text_parts = [page.get_text() for page in check_doc]
+        check_doc.close()
+        text_content = '\n\f\n'.join(text_parts)  # form-feed marks page breaks
+        return send_file(
+            io.BytesIO(text_content.encode('utf-8')),
+            mimetype='text/plain; charset=utf-8',
+            as_attachment=True,
+            download_name=f'{base_name}.txt',
+        )
+
+    check_doc.close()
+
+    # DOCX path: pdf2docx works off real file paths, so the upload is
+    # written to a temp .pdf and converted to a temp .docx alongside it.
+    tmp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False, dir=PDF_EDIT_TMP_DIR)
+    tmp_pdf.write(pdf_bytes)
+    tmp_pdf.close()
+    tmp_docx_path = tmp_pdf.name[:-4] + '.docx'
+
+    try:
+        cv = Converter(tmp_pdf.name)
+        try:
+            cv.convert(tmp_docx_path)
+        finally:
+            cv.close()
+        with open(tmp_docx_path, 'rb') as out_f:
+            docx_bytes = out_f.read()
+    except Exception:
+        abort(400, description='This PDF could not be converted to Word. It may be a scanned/image-only PDF or have a very complex layout — try "Extract as Text" instead.')
+    finally:
+        for p in (tmp_pdf.name, tmp_docx_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True,
+        download_name=f'{base_name}.docx',
     )
 
 
