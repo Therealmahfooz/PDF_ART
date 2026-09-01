@@ -1,4 +1,6 @@
+import base64
 import io
+import json
 import os
 import re
 import sqlite3
@@ -65,6 +67,8 @@ TOOL_LABELS = {
     '/pdf/merge': 'Merge PDF',
     '/logo-remover.html': 'Logo Remover',
     '/pdf-to-word.html': 'PDF to Word/Text',
+    '/compress-pdf.html': 'Compress PDF',
+    '/sign-pdf.html': 'Sign PDF',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -996,6 +1000,243 @@ def convert_pdf_to_word():
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         as_attachment=True,
         download_name=f'{base_name}.docx',
+    )
+
+
+@app.route('/compress-pdf.html')
+def compress_pdf_page():
+    return render_template('compress_pdf.html')
+
+
+@app.route('/compress-pdf', methods=['POST'])
+def compress_pdf():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    level = (request.form.get('level') or 'medium').lower()
+    if level not in ('low', 'medium', 'high'):
+        level = 'medium'
+    # "low" = light compression, best quality. "high" = smallest file size.
+    quality_map = {'low': 80, 'medium': 55, 'high': 30}
+    max_dim_map = {'low': 2200, 'medium': 1600, 'high': 1100}
+    quality = quality_map[level]
+    max_dim = max_dim_map[level]
+
+    pdf_bytes = f.read()
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.needs_pass:
+        doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    if doc.page_count == 0:
+        doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    # Recompress every embedded image (downscale + re-encode as JPEG at the
+    # chosen quality), then let PyMuPDF garbage-collect and deflate the
+    # rest of the file. This is the same image-decode/encode approach the
+    # Logo Remover tool already uses (cv2), so no new dependency is needed.
+    seen_xrefs = set()
+    try:
+        for page in doc:
+            for img in page.get_images(full=True):
+                xref = img[0]
+                if xref in seen_xrefs:
+                    continue
+                seen_xrefs.add(xref)
+                try:
+                    base_img = doc.extract_image(xref)
+                    img_bytes = base_img.get('image') if base_img else None
+                    if not img_bytes:
+                        continue
+                    img_arr = np.frombuffer(img_bytes, np.uint8)
+                    cv_img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+                    if cv_img is None:
+                        continue
+                    h, w = cv_img.shape[:2]
+                    if max(h, w) > max_dim:
+                        ratio = max_dim / max(h, w)
+                        cv_img = cv2.resize(
+                            cv_img,
+                            (max(1, int(w * ratio)), max(1, int(h * ratio))),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                    ok, buf = cv2.imencode('.jpg', cv_img, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                    if not ok:
+                        continue
+                    page.replace_image(xref, stream=buf.tobytes())
+                except Exception:
+                    # If one image can't be recompressed, leave it as-is
+                    # rather than failing the whole file.
+                    continue
+
+        out_bytes = doc.tobytes(garbage=4, deflate=True, clean=True)
+    finally:
+        doc.close()
+
+    # For PDFs with little or no image content (e.g. plain text), the
+    # "compressed" version can end up no smaller than the original — in
+    # that case just return the original bytes instead of a bigger file.
+    if len(out_bytes) >= len(pdf_bytes):
+        out_bytes = pdf_bytes
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Compressed')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/sign-pdf.html')
+def sign_pdf_page():
+    return render_template('sign_pdf.html')
+
+
+@app.route('/prepare-signature', methods=['POST'])
+def prepare_signature():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    pdf_bytes = f.read()
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.needs_pass:
+        doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    page_count = doc.page_count
+    if page_count == 0:
+        doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    # Keep the placement screen light on the free-tier server — plenty for
+    # the vast majority of documents people sign.
+    max_pages = min(page_count, 30)
+    pages = []
+    for i in range(max_pages):
+        r = doc[i].rect
+        pages.append({'index': i, 'width': round(r.width, 2), 'height': round(r.height, 2)})
+    doc.close()
+
+    pdf_token = store_pdf_for_editing(pdf_bytes)
+    return render_template(
+        'sign_pdf_place.html',
+        pages=pages,
+        pdf_token=pdf_token,
+        page_count=page_count,
+        truncated=page_count > max_pages,
+    )
+
+
+@app.route('/pdf-sign-page/<token>/<int:page_num>.png')
+def pdf_sign_page_image(token, page_num):
+    """Serves a preview PNG of one page of a temporarily-stored PDF, so the
+    Sign PDF placement screen can show real page previews to drag a
+    signature onto."""
+    pdf_bytes = load_pdf_for_editing(token)
+    if pdf_bytes is None:
+        abort(404)
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(404)
+    if page_num < 0 or page_num >= doc.page_count:
+        doc.close()
+        abort(404)
+    pix = doc[page_num].get_pixmap(dpi=110)
+    img_bytes = pix.tobytes('png')
+    doc.close()
+    resp = make_response(img_bytes)
+    resp.headers['Content-Type'] = 'image/png'
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
+@app.route('/apply-pdf-signature', methods=['POST'])
+def apply_pdf_signature():
+    pdf_token = request.form.get('pdf_token', '')
+    pdf_bytes = load_pdf_for_editing(pdf_token)
+    if pdf_bytes is None:
+        abort(400, description='The original PDF could not be found — it may have expired (finish signing within an hour). Please upload the file again.')
+
+    try:
+        placements = json.loads(request.form.get('placements', '[]'))
+    except (TypeError, ValueError):
+        placements = []
+    if not isinstance(placements, list) or not placements:
+        abort(400, description='No signature was placed on the document. Draw or type a signature, then drag it onto a page before applying.')
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='The original PDF data was lost — please upload the file again.')
+
+    applied = 0
+    try:
+        for item in placements:
+            if not isinstance(item, dict):
+                continue
+            try:
+                page_num = int(item.get('page', -1))
+                x = float(item.get('x', 0))
+                y = float(item.get('y', 0))
+                w = float(item.get('w', 0))
+                h = float(item.get('h', 0))
+            except (TypeError, ValueError):
+                continue
+            img_data = item.get('image') or ''
+            if page_num < 0 or page_num >= doc.page_count or w <= 0 or h <= 0 or not img_data:
+                continue
+            if ',' in img_data:
+                img_data = img_data.split(',', 1)[1]
+            try:
+                img_bytes = base64.b64decode(img_data)
+            except (ValueError, TypeError):
+                continue
+
+            page = doc[page_num]
+            rect = fitz.Rect(x, y, x + w, y + h) & page.rect  # keep it on the page
+            if rect.is_empty:
+                continue
+            try:
+                page.insert_image(rect, stream=img_bytes, overlay=True)
+                applied += 1
+            except Exception:
+                continue
+
+        if applied == 0:
+            abort(400, description='The signature(s) could not be placed on the document. Please try again.')
+
+        out_bytes = doc.tobytes()
+    finally:
+        doc.close()
+        discard_pdf_edit_token(pdf_token)
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Signed')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
     )
 
 
