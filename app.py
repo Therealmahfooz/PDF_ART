@@ -69,6 +69,7 @@ TOOL_LABELS = {
     '/pdf-to-word.html': 'PDF to Word/Text',
     '/compress-pdf.html': 'Compress PDF',
     '/sign-pdf.html': 'Sign PDF',
+    '/scanner.html': 'Photo/Document Scanner',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -303,6 +304,102 @@ def safe_doc_basename(raw, fallback):
     name = re.sub(r'[^A-Za-z0-9 _\-]', '', (raw or '').strip())
     name = name.strip()
     return name or fallback
+
+
+def _scan_order_points(pts):
+    """Sorts 4 (x, y) points into top-left, top-right, bottom-right,
+    bottom-left order, for a perspective transform."""
+    rect = np.zeros((4, 2), dtype='float32')
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
+
+
+def _scan_four_point_transform(image, pts):
+    rect = _scan_order_points(pts)
+    (tl, tr, br, bl) = rect
+    width_a = np.linalg.norm(br - bl)
+    width_b = np.linalg.norm(tr - tl)
+    max_width = max(int(width_a), int(width_b))
+    height_a = np.linalg.norm(tr - br)
+    height_b = np.linalg.norm(tl - bl)
+    max_height = max(int(height_a), int(height_b))
+    if max_width < 10 or max_height < 10:
+        return image
+    dst = np.array(
+        [[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]],
+        dtype='float32',
+    )
+    matrix = cv2.getPerspectiveTransform(rect, dst)
+    return cv2.warpPerspective(image, matrix, (max_width, max_height))
+
+
+def _scan_detect_and_warp(img_bgr):
+    """Finds the largest quadrilateral (the document's edges) in a photo
+    and perspective-corrects it to a straight, top-down view. If no
+    confident document edge is found, the original photo is returned
+    unchanged rather than risking a bad crop."""
+    h, w = img_bgr.shape[:2]
+    longest_side = max(h, w)
+    ratio = 1000.0 / longest_side if longest_side > 1000 else 1.0
+    small = cv2.resize(img_bgr, (max(1, int(w * ratio)), max(1, int(h * ratio))))
+
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    edged = cv2.Canny(gray, 50, 150)
+    edged = cv2.dilate(edged, None, iterations=2)
+    edged = cv2.erode(edged, None, iterations=1)
+
+    contours, _ = cv2.findContours(edged, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:8]
+
+    small_area = small.shape[0] * small.shape[1]
+    doc_corners = None
+    for c in contours:
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        if len(approx) == 4 and cv2.contourArea(approx) > 0.25 * small_area:
+            doc_corners = approx.reshape(4, 2).astype('float32')
+            break
+
+    if doc_corners is None:
+        return img_bgr
+
+    doc_corners = doc_corners / ratio
+    return _scan_four_point_transform(img_bgr, doc_corners)
+
+
+def _scan_clahe(bgr_img):
+    """Evens out lighting/shadows using contrast-limited adaptive
+    histogram equalization on the lightness channel only, so colors
+    don't shift."""
+    lab = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l2 = clahe.apply(l)
+    return cv2.cvtColor(cv2.merge((l2, a, b)), cv2.COLOR_LAB2BGR)
+
+
+def _scan_apply_mode(bgr_img, mode):
+    if mode == 'color':
+        return _scan_clahe(bgr_img)
+
+    gray = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2GRAY)
+    if mode == 'gray':
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray2 = clahe.apply(gray)
+        return cv2.cvtColor(gray2, cv2.COLOR_GRAY2BGR)
+
+    # 'bw' — classic black-and-white scanned-document look
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    bw = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 25, 15
+    )
+    return cv2.cvtColor(bw, cv2.COLOR_GRAY2BGR)
 
 
 def resolve_font(doc, page_num, font_label, tmp_files, font_cache=None):
@@ -1232,6 +1329,88 @@ def apply_pdf_signature():
         discard_pdf_edit_token(pdf_token)
 
     output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Signed')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/scanner.html')
+def scanner_page():
+    return render_template('scanner.html')
+
+
+@app.route('/scan-documents', methods=['POST'])
+def scan_documents():
+    files = [f for f in request.files.getlist('images') if f and f.filename]
+    if not files:
+        abort(400, description='No photos were received. Please take or add at least one photo.')
+
+    max_pages = 40
+    if len(files) > max_pages:
+        abort(400, description=f'Please scan at most {max_pages} photos at a time.')
+
+    mode = (request.form.get('mode') or 'color').lower()
+    if mode not in ('color', 'gray', 'bw'):
+        mode = 'color'
+
+    doc = fitz.open()
+    processed = 0
+    try:
+        for f in files:
+            is_image = (f.mimetype or '').startswith('image/') or re.search(
+                r'\.(jpe?g|png|webp|bmp|heic|heif)$', f.filename, re.IGNORECASE
+            )
+            if not is_image:
+                continue
+            raw = f.read()
+            if not raw:
+                continue
+            arr = np.frombuffer(raw, np.uint8)
+            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if img is None:
+                continue
+
+            warped = _scan_detect_and_warp(img)
+            final_img = _scan_apply_mode(warped, mode)
+
+            ok, buf = cv2.imencode('.jpg', final_img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            if not ok:
+                continue
+            img_bytes = buf.tobytes()
+
+            h, w = final_img.shape[:2]
+            # A4 at 72dpi, with a small margin — the scanned photo's own
+            # aspect ratio is kept, centered on the page.
+            page_w, page_h = 595.0, 842.0
+            margin = 18.0
+            avail_w = page_w - margin * 2
+            avail_h = page_h - margin * 2
+            img_ratio = w / h
+            avail_ratio = avail_w / avail_h
+            if img_ratio > avail_ratio:
+                draw_w = avail_w
+                draw_h = avail_w / img_ratio
+            else:
+                draw_h = avail_h
+                draw_w = avail_h * img_ratio
+            x0 = (page_w - draw_w) / 2
+            y0 = (page_h - draw_h) / 2
+
+            page = doc.new_page(width=page_w, height=page_h)
+            page.insert_image(fitz.Rect(x0, y0, x0 + draw_w, y0 + draw_h), stream=img_bytes)
+            processed += 1
+
+        if processed == 0:
+            abort(400, description='None of the photos could be processed. Please try again with clearer photos.')
+
+        out_bytes = doc.tobytes(garbage=4, deflate=True)
+    finally:
+        doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Scan')
     return send_file(
         io.BytesIO(out_bytes),
         mimetype='application/pdf',
