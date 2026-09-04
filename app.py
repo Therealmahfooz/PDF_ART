@@ -70,6 +70,8 @@ TOOL_LABELS = {
     '/compress-pdf.html': 'Compress PDF',
     '/sign-pdf.html': 'Sign PDF',
     '/scanner.html': 'Photo/Document Scanner',
+    '/split-pdf.html': 'Split PDF',
+    '/rotate-pdf.html': 'Rotate PDF',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -304,6 +306,42 @@ def safe_doc_basename(raw, fallback):
     name = re.sub(r'[^A-Za-z0-9 _\-]', '', (raw or '').strip())
     name = name.strip()
     return name or fallback
+
+
+def _parse_page_ranges(ranges_str, page_count):
+    """Parses a string like '1-3, 5, 8-10' into a list of 0-indexed page
+    numbers, in the order given (a reversed range like '5-3' is kept
+    reversed, so users can also use this to reorder pages). Raises
+    ValueError with a user-facing message on invalid input."""
+    if not ranges_str or not ranges_str.strip():
+        raise ValueError('Please enter which pages you mean, e.g. 1-3, 5, 8-10.')
+
+    parts = [p.strip() for p in ranges_str.split(',') if p.strip()]
+    if not parts:
+        raise ValueError('Please enter which pages you mean, e.g. 1-3, 5, 8-10.')
+
+    pages = []
+    for part in parts:
+        m = re.match(r'^(\d+)\s*-\s*(\d+)$', part)
+        if m:
+            start, end = int(m.group(1)), int(m.group(2))
+            if start < 1 or end < 1 or start > page_count or end > page_count:
+                raise ValueError(f'Page range "{part}" is out of range — this PDF has {page_count} pages.')
+            step = 1 if end >= start else -1
+            pages.extend(range(start - 1, end - 1 + step, step))
+        elif part.isdigit():
+            n = int(part)
+            if n < 1 or n > page_count:
+                raise ValueError(f'Page {n} is out of range — this PDF has {page_count} pages.')
+            pages.append(n - 1)
+        else:
+            raise ValueError(f'"{part}" is not a valid page number or range.')
+
+    if not pages:
+        raise ValueError('Please enter which pages you mean, e.g. 1-3, 5, 8-10.')
+    if len(pages) > 2000:
+        raise ValueError('That is too many pages to process at once.')
+    return pages
 
 
 def _scan_order_points(pts):
@@ -1411,6 +1449,158 @@ def scan_documents():
         doc.close()
 
     output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Scan')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/split-pdf.html')
+def split_pdf_page():
+    return render_template('split_pdf.html')
+
+
+@app.route('/split-pdf', methods=['POST'])
+def split_pdf():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    mode = (request.form.get('mode') or 'extract').lower()
+    if mode not in ('extract', 'each'):
+        mode = 'extract'
+
+    pdf_bytes = f.read()
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.needs_pass:
+        doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    page_count = doc.page_count
+    if page_count == 0:
+        doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    base_name = safe_filename(request.form.get('filename'), 'PDF-ART-Split')[:-4]  # strip the .pdf we added
+
+    if mode == 'each':
+        if page_count == 1:
+            doc.close()
+            abort(400, description='This PDF only has one page, so there is nothing to split. Try "Extract specific pages" instead.')
+        if page_count > 300:
+            doc.close()
+            abort(400, description='This PDF has too many pages to split individually in one go (300 max).')
+
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for i in range(page_count):
+                single = fitz.open()
+                single.insert_pdf(doc, from_page=i, to_page=i)
+                zf.writestr(f'{base_name}-page-{i + 1}.pdf', single.tobytes())
+                single.close()
+        doc.close()
+        mem_zip.seek(0)
+
+        return send_file(
+            mem_zip,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'{base_name}.zip',
+        )
+
+    # mode == 'extract' — pull specific pages into a single new PDF
+    try:
+        pages = _parse_page_ranges(request.form.get('ranges', ''), page_count)
+    except ValueError as e:
+        doc.close()
+        abort(400, description=str(e))
+
+    out_doc = fitz.open()
+    try:
+        for p in pages:
+            out_doc.insert_pdf(doc, from_page=p, to_page=p)
+        out_bytes = out_doc.tobytes()
+    finally:
+        out_doc.close()
+        doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Split')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/rotate-pdf.html')
+def rotate_pdf_page():
+    return render_template('rotate_pdf.html')
+
+
+@app.route('/rotate-pdf', methods=['POST'])
+def rotate_pdf():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    try:
+        angle = int(request.form.get('angle', 90))
+    except (TypeError, ValueError):
+        angle = 90
+    if angle not in (90, 180, 270):
+        angle = 90
+
+    scope = (request.form.get('scope') or 'all').lower()
+    if scope not in ('all', 'custom'):
+        scope = 'all'
+
+    pdf_bytes = f.read()
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.needs_pass:
+        doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    page_count = doc.page_count
+    if page_count == 0:
+        doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    if scope == 'custom':
+        try:
+            target_pages = set(_parse_page_ranges(request.form.get('ranges', ''), page_count))
+        except ValueError as e:
+            doc.close()
+            abort(400, description=str(e))
+    else:
+        target_pages = set(range(page_count))
+
+    for i in target_pages:
+        page = doc[i]
+        page.set_rotation((page.rotation + angle) % 360)
+
+    out_bytes = doc.tobytes()
+    doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Rotated')
     return send_file(
         io.BytesIO(out_bytes),
         mimetype='application/pdf',
