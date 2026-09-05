@@ -72,6 +72,8 @@ TOOL_LABELS = {
     '/scanner.html': 'Photo/Document Scanner',
     '/split-pdf.html': 'Split PDF',
     '/rotate-pdf.html': 'Rotate PDF',
+    '/watermark-pdf.html': 'Watermark PDF',
+    '/qr-code-generator.html': 'QR Code Generator',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -1607,6 +1609,107 @@ def rotate_pdf():
         as_attachment=True,
         download_name=output_name,
     )
+
+
+@app.route('/watermark-pdf.html')
+def watermark_pdf_page():
+    return render_template('watermark_pdf.html')
+
+
+@app.route('/watermark-pdf', methods=['POST'])
+def watermark_pdf():
+    f = request.files.get('pdf')
+    if not f or f.filename == '':
+        abort(400, description='No PDF file was received. Please go back and select a PDF.')
+
+    is_pdf = (f.mimetype == 'application/pdf') or f.filename.lower().endswith('.pdf')
+    if not is_pdf:
+        abort(400, description='Please upload a valid PDF file.')
+
+    text = (request.form.get('text') or '').strip()
+    if not text:
+        abort(400, description='Please enter the watermark text.')
+    if len(text) > 100:
+        abort(400, description='Watermark text is too long — please keep it under 100 characters.')
+
+    position = (request.form.get('position') or 'diagonal').lower()
+    if position not in ('diagonal', 'bottom'):
+        position = 'diagonal'
+
+    try:
+        opacity = float(request.form.get('opacity', 30)) / 100.0
+    except (TypeError, ValueError):
+        opacity = 0.3
+    opacity = max(0.05, min(opacity, 1.0))
+
+    scope = (request.form.get('scope') or 'all').lower()
+    if scope not in ('all', 'custom'):
+        scope = 'all'
+
+    pdf_bytes = f.read()
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        abort(400, description='This PDF could not be read. It may be corrupted or password-protected.')
+
+    if doc.needs_pass:
+        doc.close()
+        abort(400, description='This PDF is password-protected. Please unlock it first using the Protect/Unlock PDF tool, then try again.')
+
+    page_count = doc.page_count
+    if page_count == 0:
+        doc.close()
+        abort(400, description='This PDF has no pages.')
+
+    if scope == 'custom':
+        try:
+            target_pages = set(_parse_page_ranges(request.form.get('ranges', ''), page_count))
+        except ValueError as e:
+            doc.close()
+            abort(400, description=str(e))
+    else:
+        target_pages = set(range(page_count))
+
+    gray = (0.55, 0.55, 0.55)
+    for i in target_pages:
+        page = doc[i]
+        rect = page.rect
+
+        if position == 'diagonal':
+            fontsize = max(18, min(rect.width, rect.height) / 6)
+            diag = (rect.width ** 2 + rect.height ** 2) ** 0.5
+            text_width = fitz.get_text_length(text, fontname='helv', fontsize=fontsize)
+            if text_width > diag * 0.85:
+                fontsize = fontsize * (diag * 0.85) / text_width
+                text_width = fitz.get_text_length(text, fontname='helv', fontsize=fontsize)
+            point = fitz.Point(rect.width / 2 - text_width / 2, rect.height / 2)
+            mat = fitz.Matrix(45)
+            page.insert_text(
+                point, text, fontsize=fontsize, fontname='helv',
+                color=gray, fill_opacity=opacity, morph=(point, mat),
+            )
+        else:
+            box = fitz.Rect(20, rect.height - 40, rect.width - 20, rect.height - 12)
+            page.insert_textbox(
+                box, text, fontsize=12, fontname='helv',
+                color=gray, fill_opacity=opacity, align=1,
+            )
+
+    out_bytes = doc.tobytes()
+    doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Watermarked')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/qr-code-generator.html')
+def qr_code_generator_page():
+    return render_template('qr_code_generator.html')
 
 
 @app.route('/admin')
