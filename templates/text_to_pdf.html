@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Text to PDF — PDF ART</title>
+<meta name="description" content="Turn plain text into a clean, downloadable PDF. Free, no sign-up.">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px 60px;
+  }
+  .wrap { width: 100%; max-width: 720px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px; text-align: center; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 32px; text-align: center; margin-bottom: 8px; }
+  p.sub { text-align: center; color: var(--ink-soft); font-size: 14.5px; margin-bottom: 30px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 26px; }
+
+  textarea {
+    width: 100%; min-height: 320px; resize: vertical;
+    font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.55; color: var(--ink);
+    padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--paper);
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  .row { display: flex; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 140px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin-bottom: 6px; }
+  .field select, .field input[type="text"], .field input[type="number"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--paper); font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--ink);
+    outline: none;
+  }
+  .field select:focus, .field input:focus { border-color: var(--accent); }
+
+  .char-count { text-align: right; font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+
+  .submit-btn {
+    margin-top: 22px; width: 100%; padding: 14px; border: none; border-radius: 999px;
+    background: var(--accent); color: #fff; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 15px;
+    cursor: pointer; transition: background .15s;
+  }
+  .submit-btn:hover { background: var(--accent-dark); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .error-box {
+    display: none; margin-top: 16px; padding: 12px 16px; border-radius: 10px;
+    background: #FBEAEA; border: 1px solid #E3B6B6; color: #7A2020; font-size: 13.5px;
+  }
+  .error-box.show { display: block; }
+
+  a.back-link { display: inline-block; margin-top: 22px; font-size: 13px; color: var(--ink-soft); text-decoration: none; text-align: center; }
+  a.back-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="wrap">
+  <div class="eyebrow">Text Tools</div>
+  <h1>Text to PDF</h1>
+  <p class="sub">Paste or type your text below — it becomes a clean, print-ready PDF, wrapped across as many pages as needed.</p>
+
+  <div class="card">
+    <form id="textToPdfForm" action="/convert-text-to-pdf" method="post">
+      <textarea name="text" id="textInput" placeholder="Type or paste your text here..." maxlength="300000" required></textarea>
+      <div class="char-count"><span id="charCount">0</span> / 300,000 characters</div>
+
+      <div class="row">
+        <div class="field">
+          <label for="pageSize">Page size</label>
+          <select name="page_size" id="pageSize">
+            <option value="a4" selected>A4</option>
+            <option value="letter">Letter</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fontSelect">Font</label>
+          <select name="font" id="fontSelect">
+            <option value="helv" selected>Sans-serif</option>
+            <option value="times">Serif</option>
+            <option value="courier">Monospace</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fontSize">Font size</label>
+          <input type="number" name="font_size" id="fontSize" value="12" min="8" max="28" step="1">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field" style="flex: 2;">
+          <label for="filename">File name</label>
+          <input type="text" name="filename" id="filename" placeholder="PDF-ART-Text">
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+
+      <button type="submit" class="submit-btn" id="submitBtn">Convert to PDF</button>
+    </form>
+  </div>
+
+  <div style="text-align:center;">
+    <a href="/" class="back-link">&larr; Back to all tools</a>
+  </div>
+</div>
+
+<script>
+  const textInput = document.getElementById('textInput');
+  const charCount = document.getElementById('charCount');
+  const form = document.getElementById('textToPdfForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const errorBox = document.getElementById('errorBox');
+
+  textInput.addEventListener('input', () => {
+    charCount.textContent = textInput.value.length.toLocaleString();
+  });
+
+  form.addEventListener('submit', (e) => {
+    errorBox.classList.remove('show');
+    if (!textInput.value.trim()) {
+      e.preventDefault();
+      errorBox.textContent = 'Please type or paste some text first.';
+      errorBox.classList.add('show');
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Converting...';
+    // Re-enable shortly after — if the browser is just showing the file
+    // download/save dialog, the user should be able to convert again.
+    setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = 'Convert to PDF'; }, 3000);
+  });
+</script>
+
+</body>
+</html>

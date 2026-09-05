@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Excel to PDF — PDF ART</title>
+<meta name="description" content="Convert an Excel spreadsheet (.xlsx) into a clean, print-ready PDF. Free, no sign-up.">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3;
+    --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px 60px;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px; text-align: center; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 32px; text-align: center; margin-bottom: 8px; }
+  p.sub { text-align: center; color: var(--ink-soft); font-size: 14.5px; margin-bottom: 30px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 26px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 36px 20px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    background: var(--paper);
+  }
+  .drop-zone.drag-over, .drop-zone:hover { border-color: var(--accent); background: var(--accent-tint); }
+  .drop-zone .dz-icon { width: 34px; height: 34px; stroke: var(--accent); margin-bottom: 10px; }
+  .drop-zone .dz-text { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .drop-zone .dz-sub { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+  .file-chip {
+    display: none; align-items: center; justify-content: space-between; gap: 10px;
+    margin-top: 14px; padding: 10px 14px; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 13px; color: var(--ink);
+  }
+  .file-chip.show { display: flex; }
+  .file-chip .remove-file { color: var(--accent); cursor: pointer; font-weight: 700; font-size: 13px; background: none; border: none; }
+
+  .row { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 140px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin-bottom: 6px; }
+  .field select, .field input[type="text"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--paper); font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--ink);
+    outline: none;
+  }
+  .field select:focus, .field input:focus { border-color: var(--accent); }
+
+  .submit-btn {
+    margin-top: 22px; width: 100%; padding: 14px; border: none; border-radius: 999px;
+    background: var(--accent); color: #fff; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 15px;
+    cursor: pointer; transition: background .15s;
+  }
+  .submit-btn:hover { background: var(--accent-dark); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .error-box {
+    display: none; margin-top: 16px; padding: 12px 16px; border-radius: 10px;
+    background: #FBEAEA; border: 1px solid #E3B6B6; color: #7A2020; font-size: 13.5px;
+  }
+  .error-box.show { display: block; }
+
+  .note { margin-top: 16px; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+
+  a.back-link { display: inline-block; margin-top: 22px; font-size: 13px; color: var(--ink-soft); text-decoration: none; text-align: center; }
+  a.back-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="wrap">
+  <div class="eyebrow">Spreadsheet Tools</div>
+  <h1>Excel to PDF</h1>
+  <p class="sub">Upload an .xlsx spreadsheet and get a clean, print-ready PDF — every sheet included, columns auto-fit to the page.</p>
+
+  <div class="card">
+    <form id="excelForm" action="/convert-excel-to-pdf" method="post" enctype="multipart/form-data">
+      <div class="drop-zone" id="dropZone">
+        <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .3 9H6a4 4 0 0 1-2-7.1z"/><path d="M12 12v6m0-6-2.5 2.5M12 12l2.5 2.5"/></svg>
+        <div class="dz-text">Click to choose, or drag & drop your Excel file</div>
+        <div class="dz-sub">.xlsx or .xlsm — up to 50MB</div>
+        <input type="file" name="excel" id="fileInput" accept=".xlsx,.xlsm" style="display:none;" required>
+      </div>
+      <div class="file-chip" id="fileChip">
+        <span id="fileName"></span>
+        <button type="button" class="remove-file" id="removeFile">Remove</button>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="orientation">Page orientation</label>
+          <select name="orientation" id="orientation">
+            <option value="landscape" selected>Landscape</option>
+            <option value="portrait">Portrait</option>
+          </select>
+        </div>
+        <div class="field" style="flex: 2;">
+          <label for="filename">File name</label>
+          <input type="text" name="filename" id="filename" placeholder="PDF-ART-Excel">
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+
+      <button type="submit" class="submit-btn" id="submitBtn" disabled>Convert to PDF</button>
+
+      <div class="note">Every sheet in the workbook is converted, in order. Very wide sheets get their columns shrunk to fit the page; very long sheets automatically continue onto extra pages.</div>
+    </form>
+  </div>
+
+  <div style="text-align:center;">
+    <a href="/" class="back-link">&larr; Back to all tools</a>
+  </div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileChip = document.getElementById('fileChip');
+  const fileNameEl = document.getElementById('fileName');
+  const removeFileBtn = document.getElementById('removeFile');
+  const submitBtn = document.getElementById('submitBtn');
+  const errorBox = document.getElementById('errorBox');
+  const form = document.getElementById('excelForm');
+
+  function showFile(file) {
+    fileNameEl.textContent = file.name;
+    fileChip.classList.add('show');
+    submitBtn.disabled = false;
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) showFile(fileInput.files[0]);
+  });
+
+  ['dragover', 'dragenter'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
+  });
+  dropZone.addEventListener('drop', (e) => {
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      showFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  removeFileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.value = '';
+    fileChip.classList.remove('show');
+    submitBtn.disabled = true;
+  });
+
+  form.addEventListener('submit', (e) => {
+    errorBox.classList.remove('show');
+    if (!fileInput.files.length) {
+      e.preventDefault();
+      errorBox.textContent = 'Please choose an Excel file first.';
+      errorBox.classList.add('show');
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Converting...';
+    setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = 'Convert to PDF'; }, 4000);
+  });
+</script>
+
+</body>
+</html>
