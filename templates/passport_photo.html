@@ -124,6 +124,7 @@
     touch-action: none; cursor: grab; flex-shrink: 0;
   }
   #frame.grabbing { cursor: grabbing; }
+  #frame.erasing { cursor: crosshair; }
   #frame img { position: absolute; left: 0; top: 0; user-select: none; pointer-events: none; }
   .editor-side { flex: 1; min-width: 180px; }
   .editor-side label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 8px; }
@@ -143,6 +144,8 @@
   button.primary:active { transform: scale(0.98); }
   button.secondary { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
   button.secondary:hover { background: var(--paper-deep); }
+  button.secondary:disabled { opacity: 0.5; cursor: default; }
+  button.secondary.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   .bg-swatches { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .bg-swatches .swatch {
@@ -156,6 +159,11 @@
     padding: 2px; cursor: pointer; background: var(--card); flex: none;
   }
   #removeBgBtn:disabled { opacity: 0.7; cursor: default; }
+
+  .erase-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .erase-toolbar button { flex: none; min-width: 90px; padding: 10px 14px; }
+  .erase-toolbar .erase-slider-wrap { flex: 1; min-width: 120px; display: flex; align-items: center; gap: 8px; }
+  .erase-toolbar .erase-slider-wrap span { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
   footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
   footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
@@ -225,6 +233,7 @@
     <div class="actions" id="bgActions">
       <button class="secondary" id="removeBgBtn" style="flex-basis:100%;">Remove Background</button>
     </div>
+    <div class="hint" id="bgModelHint">First time it needs to download an AI model — it's already started loading in the background, so it should be quicker once you tap the button below.</div>
     <div class="field" id="bgControls" style="display:none;">
       <label>Background Color</label>
       <div class="bg-swatches" id="bgSwatches">
@@ -234,6 +243,19 @@
         <button type="button" class="swatch" data-color="#B23A2E" style="background:#B23A2E;" title="Red"></button>
         <input type="color" id="customBgColor" value="#FFFFFF" title="Custom color">
       </div>
+    </div>
+
+    <div class="field" id="eraseControls" style="display:none;">
+      <label>Clean Up Leftover Areas</label>
+      <div class="erase-toolbar">
+        <button type="button" class="secondary" id="eraseToggleBtn">Erase</button>
+        <div class="erase-slider-wrap">
+          <span>Brush</span>
+          <input type="range" id="eraseBrushSize" min="8" max="70" value="26">
+        </div>
+        <button type="button" class="secondary" id="eraseUndoBtn" disabled>Undo</button>
+      </div>
+      <div class="hint">Turn Erase on, then brush over any background bits left behind. Undo removes your last stroke.</div>
     </div>
 
     <div class="actions">
@@ -282,6 +304,10 @@ const removeBgBtn = document.getElementById('removeBgBtn');
 const bgControls = document.getElementById('bgControls');
 const bgSwatches = document.getElementById('bgSwatches');
 const customBgColor = document.getElementById('customBgColor');
+const eraseControls = document.getElementById('eraseControls');
+const eraseToggleBtn = document.getElementById('eraseToggleBtn');
+const eraseBrushSize = document.getElementById('eraseBrushSize');
+const eraseUndoBtn = document.getElementById('eraseUndoBtn');
 
 const DPI = 300;
 const FRAME_MAX = 300; // on-screen preview size cap in px
@@ -295,6 +321,74 @@ let dragging = false, dragStartX = 0, dragStartY = 0, dragOrigX = 0, dragOrigY =
 let bgRemoved = false;
 let currentBgColor = '#FFFFFF';
 let removeBackgroundFn = null; // lazy-loaded, cached across removals
+let preloadFn = null;
+
+// Shared with both the background preload and the actual removal call so
+// the preload always warms up the exact same config we'll use.
+// NOTE: we intentionally do NOT force a smaller model like "isnet_quint8"
+// here — on some CDN mirrors (including esm.sh, which this page loads the
+// library from) that model's file is missing from the resources list and
+// the whole removal fails with a "resource not found" error. Leaving
+// `model` unset uses the library's own default ("isnet_fp16"), which is
+// the config IMG.LY actually tests and keeps available everywhere.
+// `device` IS set explicitly to 'cpu' (plain WASM) — leaving it unset, or
+// forcing 'gpu', both led to the library's internal execution-provider
+// setup breaking on some browsers/devices (errors like "undefined is not
+// iterable"). 'cpu' is the slowest option but the one that reliably works
+// everywhere; it's still fast enough for a small passport photo.
+const BG_REMOVAL_CONFIG = { device: 'cpu' };
+
+// masterCanvas always holds the CURRENT full-resolution pixels of the photo
+// (original -> after background removal -> after any erase strokes). It is
+// kept at the photo's original width/height for its entire lifetime, which
+// is what keeps the crop-frame math (baseScale, dispW/dispH, offsets — all
+// computed from img.naturalWidth/Height) correct no matter what happens to
+// the pixels inside. Everything that used to draw straight from `img` now
+// draws from masterCanvas instead.
+let masterCanvas = null;
+let masterCtx = null;
+let eraseMode = false;
+let erasing = false;
+let eraseUndoStack = [];
+const ERASE_UNDO_LIMIT = 15;
+
+function initMasterCanvasFromImage(im) {
+  masterCanvas = document.createElement('canvas');
+  masterCanvas.width = im.naturalWidth;
+  masterCanvas.height = im.naturalHeight;
+  masterCtx = masterCanvas.getContext('2d');
+  masterCtx.drawImage(im, 0, 0);
+}
+
+function refreshEditImgFromMaster() {
+  editImg.src = masterCanvas.toDataURL('image/png');
+}
+
+function pushEraseUndoState() {
+  eraseUndoStack.push(masterCanvas.toDataURL('image/png'));
+  if (eraseUndoStack.length > ERASE_UNDO_LIMIT) eraseUndoStack.shift();
+  eraseUndoBtn.disabled = false;
+}
+
+function setEraseMode(on) {
+  eraseMode = on;
+  eraseToggleBtn.classList.toggle('active', on);
+  eraseToggleBtn.textContent = on ? 'Erase: On' : 'Erase';
+  frame.classList.toggle('erasing', on);
+}
+
+function resetEditingState() {
+  bgRemoved = false;
+  currentBgColor = '#FFFFFF';
+  frame.style.backgroundColor = '';
+  bgControls.style.display = 'none';
+  eraseControls.style.display = 'none';
+  setEraseMode(false);
+  eraseUndoStack = [];
+  eraseUndoBtn.disabled = true;
+  removeBgBtn.disabled = false;
+  removeBgBtn.textContent = 'Remove Background';
+}
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -327,9 +421,12 @@ function loadFile(file) {
   im.onload = () => {
     img = im;
     editImg.src = url;
+    initMasterCanvasFromImage(im);
+    resetEditingState();
     uploadStage.style.display = 'none';
     editorStage.style.display = 'block';
     setupFrame();
+    preloadBgModelInBackground();
   };
   im.src = url;
 }
@@ -374,13 +471,23 @@ function applyTransform(recenter) {
 zoomSlider.addEventListener('input', () => applyTransform(false));
 
 frame.addEventListener('pointerdown', e => {
+  frame.setPointerCapture(e.pointerId);
+  if (eraseMode) {
+    erasing = true;
+    pushEraseUndoState(); // one undo step per stroke, not per pixel
+    eraseAt(e);
+    return;
+  }
   dragging = true;
   frame.classList.add('grabbing');
   dragStartX = e.clientX; dragStartY = e.clientY;
   dragOrigX = offsetX; dragOrigY = offsetY;
-  frame.setPointerCapture(e.pointerId);
 });
 frame.addEventListener('pointermove', e => {
+  if (erasing) {
+    eraseAt(e);
+    return;
+  }
   if (!dragging) return;
   offsetX = dragOrigX + (e.clientX - dragStartX);
   offsetY = dragOrigY + (e.clientY - dragStartY);
@@ -389,17 +496,14 @@ frame.addEventListener('pointermove', e => {
   offsetY = Math.min(0, Math.max(fh - dispH, offsetY));
   editImg.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
 });
-frame.addEventListener('pointerup', () => { dragging = false; frame.classList.remove('grabbing'); });
-frame.addEventListener('pointercancel', () => { dragging = false; frame.classList.remove('grabbing'); });
+frame.addEventListener('pointerup', () => { dragging = false; erasing = false; frame.classList.remove('grabbing'); });
+frame.addEventListener('pointercancel', () => { dragging = false; erasing = false; frame.classList.remove('grabbing'); });
 
 changePhotoBtn.addEventListener('click', () => {
   img = null;
-  bgRemoved = false;
-  currentBgColor = '#FFFFFF';
-  frame.style.backgroundColor = '';
-  bgControls.style.display = 'none';
-  removeBgBtn.disabled = false;
-  removeBgBtn.textContent = 'Remove Background';
+  masterCanvas = null;
+  masterCtx = null;
+  resetEditingState();
   uploadStage.style.display = 'block';
   editorStage.style.display = 'none';
   fileInput.value = '';
@@ -415,7 +519,32 @@ async function getRemoveBackgroundFn() {
   console.log('crossOriginIsolated (needed for fast multi-threaded processing):', window.crossOriginIsolated);
   const mod = await import('https://esm.sh/@imgly/background-removal@1.7.0');
   removeBackgroundFn = mod.removeBackground;
+  preloadFn = mod.preload;
   return removeBackgroundFn;
+}
+
+// Kicked off the moment a photo is loaded (see loadFile), instead of only
+// when the user clicks "Remove Background" — on a slow connection this
+// overlaps the ~15-40MB model download with the time the person spends
+// positioning/zooming their photo, so by the time they actually tap the
+// button, most or all of the download is already done.
+let bgModelPreloadStarted = false;
+function preloadBgModelInBackground() {
+  if (bgModelPreloadStarted) return;
+  bgModelPreloadStarted = true;
+  const bgModelHint = document.getElementById('bgModelHint');
+  getRemoveBackgroundFn()
+    .then(() => preloadFn && preloadFn({
+      ...BG_REMOVAL_CONFIG,
+      progress: (key, current, total) => {
+        if (bgModelHint && key && key.startsWith('fetch:')) {
+          const pct = total ? Math.round((current / total) * 100) : 0;
+          bgModelHint.textContent = `Getting the background-removal tool ready in the background… ${pct}%`;
+        }
+      },
+    }))
+    .then(() => { if (bgModelHint) bgModelHint.textContent = 'Background-removal tool is ready — tap the button whenever you\'re ready.'; })
+    .catch(() => { bgModelPreloadStarted = false; }); // allow retry on click if this failed (e.g. offline)
 }
 
 function applyBgColor(color) {
@@ -432,59 +561,132 @@ bgSwatches.querySelectorAll('.swatch').forEach(sw => {
 customBgColor.addEventListener('input', () => applyBgColor(customBgColor.value));
 
 removeBgBtn.addEventListener('click', async () => {
-  if (!img) return;
+  if (!img || !masterCanvas) return;
   removeBgBtn.disabled = true;
   removeBgBtn.textContent = 'Loading AI model…';
   try {
     const removeBackground = await getRemoveBackgroundFn();
-    const MAX_DIM = 2000; // passport photos only need a few hundred px; no reason to feed a 12MP phone photo through the model
-    let bgInput = editImg.src;
-    if (img.naturalWidth > MAX_DIM || img.naturalHeight > MAX_DIM) {
-      const scale = MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight);
+
+    // The model only needs to SEE the photo at a modest size to segment it
+    // accurately — it does not need the full 12MP camera resolution. We
+    // still feed it a (possibly) downscaled copy for speed, but — unlike
+    // before — we never use that downscaled result as the final photo.
+    // Using it directly used to stretch/distort the subject, because the
+    // crop frame's math is fixed to the ORIGINAL photo's dimensions.
+    const MAX_DIM = 1600;
+    let bgInput;
+    if (masterCanvas.width > MAX_DIM || masterCanvas.height > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(masterCanvas.width, masterCanvas.height);
       const resizeCanvas = document.createElement('canvas');
-      resizeCanvas.width = Math.round(img.naturalWidth * scale);
-      resizeCanvas.height = Math.round(img.naturalHeight * scale);
-      resizeCanvas.getContext('2d').drawImage(img, 0, 0, resizeCanvas.width, resizeCanvas.height);
+      resizeCanvas.width = Math.round(masterCanvas.width * scale);
+      resizeCanvas.height = Math.round(masterCanvas.height * scale);
+      resizeCanvas.getContext('2d').drawImage(masterCanvas, 0, 0, resizeCanvas.width, resizeCanvas.height);
       bgInput = await new Promise(resolve => resizeCanvas.toBlob(resolve, 'image/png'));
+    } else {
+      // The library only accepts ImageData/ArrayBuffer/Uint8Array/Blob/URL/
+      // string — NOT a raw <canvas> element. Passing masterCanvas directly
+      // here (as the old code did whenever the photo didn't need resizing)
+      // is exactly what caused the "undefined is not iterable" crash.
+      bgInput = await new Promise(resolve => masterCanvas.toBlob(resolve, 'image/png'));
     }
 
     const resultBlob = await removeBackground(bgInput, {
-      model: 'isnet_quint8', // smaller (~40MB) and noticeably faster than isnet_fp16; edges are still good for headshots
-      device: 'gpu', // uses WebGPU when the browser supports it (Chrome/Edge 113+) — can be 16-20x faster than CPU/WASM; auto-falls back to CPU otherwise
+      ...BG_REMOVAL_CONFIG,
+      // Device is left unset so the library picks the best/safest option
+      // for the browser automatically — forcing "gpu" here previously
+      // caused incomplete/patchy cutouts on devices with poor WebGPU support.
       progress: (key, current, total) => {
         if (key && key.startsWith('fetch:')) {
           const pct = total ? Math.round((current / total) * 100) : 0;
           removeBgBtn.textContent = `Downloading model… ${pct}%`;
         } else if (key && key.startsWith('compute:')) {
-          const stage = key.split(':')[1] || '';
-          removeBgBtn.textContent = `Processing (${stage})… ${current + 1}/${total}`;
+          removeBgBtn.textContent = 'Removing background…';
         } else {
           removeBgBtn.textContent = 'Removing background…';
         }
       },
     });
-    const dataUrl = URL.createObjectURL(resultBlob);
 
-    const newImg = new Image();
-    newImg.onload = () => {
-      img = newImg;
-      editImg.src = dataUrl;
-      bgRemoved = true;
-      bgControls.style.display = 'block';
-      applyBgColor(currentBgColor);
-      removeBgBtn.textContent = 'Background Removed ✓';
-    };
-    newImg.onerror = () => {
-      throw new Error('Result image failed to load');
-    };
-    newImg.src = dataUrl;
+    // resultBlob is a cut-out PNG at bgInput's (possibly reduced) size.
+    // We use its alpha channel purely as a MASK, scaled back up and applied
+    // on top of the full-resolution original — so the subject stays sharp
+    // at full print resolution and the crop frame's geometry never breaks.
+    const maskImg = await new Promise((resolve, reject) => {
+      const mi = new Image();
+      mi.onload = () => resolve(mi);
+      mi.onerror = () => reject(new Error('Mask image failed to load'));
+      mi.src = URL.createObjectURL(resultBlob);
+    });
+
+    const cutoutCanvas = document.createElement('canvas');
+    cutoutCanvas.width = masterCanvas.width;
+    cutoutCanvas.height = masterCanvas.height;
+    const cutoutCtx = cutoutCanvas.getContext('2d');
+    cutoutCtx.drawImage(masterCanvas, 0, 0);
+    cutoutCtx.globalCompositeOperation = 'destination-in';
+    cutoutCtx.drawImage(maskImg, 0, 0, cutoutCanvas.width, cutoutCanvas.height);
+    cutoutCtx.globalCompositeOperation = 'source-over';
+    URL.revokeObjectURL(maskImg.src);
+
+    masterCanvas = cutoutCanvas;
+    masterCtx = cutoutCanvas.getContext('2d');
+    refreshEditImgFromMaster();
+
+    bgRemoved = true;
+    eraseUndoStack = [];
+    eraseUndoBtn.disabled = true;
+    bgControls.style.display = 'block';
+    eraseControls.style.display = 'block';
+    applyBgColor(currentBgColor);
+    removeBgBtn.textContent = 'Background Removed ✓';
   } catch (err) {
     console.error('Background removal failed:', err);
-    alert('Background removal could not be completed. Please check your internet connection and try again.');
-    removeBgBtn.disabled = false;
     removeBgBtn.textContent = 'Remove Background';
+    alert('Background removal could not be completed (' + (err && err.message ? err.message : 'unknown error') + '). Please check your internet connection and try again.');
+  } finally {
+    removeBgBtn.disabled = false;
   }
 });
+
+// --- Manual erase (cleans up any bits the AI missed) ---
+eraseToggleBtn.addEventListener('click', () => setEraseMode(!eraseMode));
+
+eraseUndoBtn.addEventListener('click', () => {
+  if (!eraseUndoStack.length) return;
+  const prevDataUrl = eraseUndoStack.pop();
+  const prevImg = new Image();
+  prevImg.onload = () => {
+    masterCtx.clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+    masterCtx.drawImage(prevImg, 0, 0);
+    refreshEditImgFromMaster();
+  };
+  prevImg.src = prevDataUrl;
+  eraseUndoBtn.disabled = eraseUndoStack.length === 0;
+});
+
+function frameEventToImagePoint(e) {
+  const zoom = parseInt(zoomSlider.value, 10) / 100;
+  const scale = baseScale * zoom;
+  const rect = frame.getBoundingClientRect();
+  const screenX = e.clientX - rect.left;
+  const screenY = e.clientY - rect.top;
+  return {
+    x: (screenX - offsetX) / scale,
+    y: (screenY - offsetY) / scale,
+    radius: (parseInt(eraseBrushSize.value, 10) / 2) / scale,
+  };
+}
+
+function eraseAt(e) {
+  const p = frameEventToImagePoint(e);
+  masterCtx.save();
+  masterCtx.globalCompositeOperation = 'destination-out';
+  masterCtx.beginPath();
+  masterCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+  masterCtx.fill();
+  masterCtx.restore();
+  refreshEditImgFromMaster();
+}
 
 function renderCropCanvas(pxW, pxH) {
   const zoom = parseInt(zoomSlider.value, 10) / 100;
@@ -505,7 +707,7 @@ function renderCropCanvas(pxW, pxH) {
     ctx.fillStyle = currentBgColor;
     ctx.fillRect(0, 0, pxW, pxH);
   }
-  ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, pxW, pxH);
+  ctx.drawImage(masterCanvas, cropX, cropY, cropW, cropH, 0, 0, pxW, pxH);
   return canvas;
 }
 

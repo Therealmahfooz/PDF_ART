@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PDF ART — QR Code Generator</title>
+<meta name="description" content="Free online QR code generator — turn a link, text, or contact info into a downloadable QR code. Runs entirely in your browser, nothing is uploaded.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="shortcut icon" href="/static/icons/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#8C2F39">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PDF ART">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --paper: #EDEAE1; --paper-deep: #E3DFD3; --card: #FFFFFF;
+    --ink: #23283A; --ink-soft: #6B6F81;
+    --accent: #8C2F39; --accent-dark: #6E2029; --accent-tint: #F4E7E3;
+    --border: #D9D3C3; --shadow: 0 12px 30px rgba(35, 40, 58, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at 15% 0%, rgba(140,47,57,0.05), transparent 45%), var(--paper);
+    color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 20px 24px;
+  }
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; text-align: center; margin-bottom: 14px; }
+  h1.logo { font-family: 'Fraunces', serif; font-weight: 700; font-size: 46px; letter-spacing: -0.01em; color: var(--ink); text-align: center; }
+  h1.logo .dot { color: var(--accent); }
+  .site-mark { display: block; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 14px; }
+  p.tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 500; font-size: 16px; color: var(--ink-soft); text-align: center; margin-top: 6px; margin-bottom: 40px; max-width: 440px; }
+  .card { background: var(--card); border-radius: 18px; padding: 36px; width: 100%; max-width: 620px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+  .card-label { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 10px; }
+  .card-label.spaced { margin-top: 22px; }
+
+  .field { margin-top: 4px; }
+  .field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+  .field textarea, .field input[type="text"] {
+    width: 100%; padding: 11px 12px; border-radius: 8px; font-size: 14px; border: 1px solid var(--border);
+    background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif; resize: vertical;
+  }
+  .field textarea { min-height: 70px; }
+  .field-hint { font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .color-field label { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+  .color-wrap { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--paper); border-radius: 8px; padding: 6px 10px; }
+  .color-wrap input[type="color"] { width: 28px; height: 28px; border: none; border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+  .color-wrap span { font-size: 12.5px; color: var(--ink-soft); font-family: 'Inter', monospace; }
+
+  .size-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .size-option { position: relative; }
+  .size-option input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .size-option .box { border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 8px; text-align: center; transition: border-color .15s, background .15s; background: var(--paper); font-family: 'Fraunces', serif; font-weight: 700; font-size: 13px; color: var(--ink); }
+  .size-option input:checked + .box { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  .size-option input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .qr-preview-wrap {
+    margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  #qrcode {
+    background: #fff; padding: 16px; border-radius: 14px; border: 1px solid var(--border);
+    box-shadow: var(--shadow); display: inline-block; line-height: 0;
+  }
+  #qrcode img, #qrcode canvas { display: block; }
+
+  .download-btn {
+    width: 100%; padding: 15px; border-radius: 10px; font-size: 14px;
+    letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; font-family: 'Inter', sans-serif;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    transition: background .15s, transform .08s; box-shadow: 0 6px 16px rgba(140,47,57,0.28);
+    text-decoration: none; display: block; text-align: center;
+  }
+  .download-btn:hover { background: var(--accent-dark); }
+  .download-btn:active { transform: scale(0.98); }
+  .download-btn.disabled { background: #C9C4B6; box-shadow: none; cursor: not-allowed; pointer-events: none; }
+
+  .privacy-note { margin-top: 16px; text-align: center; font-size: 11.5px; color: var(--ink-soft); font-style: italic; font-family: 'Fraunces', serif; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-soft); font-size: 12.5px; }
+  footer .credit { font-family: 'Fraunces', serif; font-style: italic; color: var(--ink); }
+  footer .credit strong { font-style: normal; font-weight: 700; color: var(--accent); }
+  footer .contact { margin-top: 8px; }
+  footer .contact a { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border-bottom: 1px solid transparent; transition: border-color .15s; }
+  footer .contact a:hover { border-color: var(--accent); }
+
+  @media (max-width: 480px) { h1.logo { font-size: 36px; } .card { padding: 24px; } .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+{% include '_nav.html' %}
+
+<div class="eyebrow">Scan Me</div>
+<img class="site-mark" src="/static/icons/icon-192.png" alt="PDF ART logo">
+<h1 class="logo">PDF ART<span class="dot">.</span></h1>
+<p class="tagline">Turn any link or text into a QR code, styled and sized your way.</p>
+
+<div class="card">
+  <div class="field">
+    <label>Text or link</label>
+    <textarea id="qrText" placeholder="https://your-link.com, or any text" maxlength="700">https://pdfarts.in</textarea>
+    <div class="field-hint">Website links, WiFi text, contact info — anything works.</div>
+  </div>
+
+  <div class="row2">
+    <div class="color-field">
+      <label>Foreground</label>
+      <div class="color-wrap">
+        <input type="color" id="fgColor" value="#23283A">
+        <span id="fgVal">#23283A</span>
+      </div>
+    </div>
+    <div class="color-field">
+      <label>Background</label>
+      <div class="color-wrap">
+        <input type="color" id="bgColor" value="#ffffff">
+        <span id="bgVal">#FFFFFF</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-label spaced">Size</div>
+  <div class="size-grid">
+    <label class="size-option">
+      <input type="radio" name="qrsize" value="200">
+      <div class="box">200px</div>
+    </label>
+    <label class="size-option">
+      <input type="radio" name="qrsize" value="300" checked>
+      <div class="box">300px</div>
+    </label>
+    <label class="size-option">
+      <input type="radio" name="qrsize" value="500">
+      <div class="box">500px</div>
+    </label>
+  </div>
+
+  <div class="qr-preview-wrap">
+    <div id="qrcode"></div>
+    <a href="#" id="downloadBtn" class="download-btn disabled" download="pdf-art-qr-code.png">Download PNG</a>
+  </div>
+
+  <div class="privacy-note">Made entirely on your device — nothing is ever sent to a server.</div>
+</div>
+
+<footer>
+  <div class="credit">Crafted by <strong>MD Mahfooz</strong></div>
+  <div class="contact"><a href="mailto:pdfarts.support@gmail.com?subject=PDF%20ART%20-%20Support">Contact Us</a></div>
+</footer>
+
+<script>
+const qrText = document.getElementById('qrText');
+const fgColor = document.getElementById('fgColor');
+const bgColor = document.getElementById('bgColor');
+const fgVal = document.getElementById('fgVal');
+const bgVal = document.getElementById('bgVal');
+const qrcodeEl = document.getElementById('qrcode');
+const downloadBtn = document.getElementById('downloadBtn');
+const sizeRadios = document.querySelectorAll('input[name="qrsize"]');
+
+let qr = null;
+let debounceTimer = null;
+
+function currentSize() {
+  const checked = document.querySelector('input[name="qrsize"]:checked');
+  return checked ? parseInt(checked.value, 10) : 300;
+}
+
+function render() {
+  const text = qrText.value.trim();
+  qrcodeEl.innerHTML = '';
+  if (!text) {
+    downloadBtn.classList.add('disabled');
+    return;
+  }
+  qr = new QRCode(qrcodeEl, {
+    text: text,
+    width: currentSize(),
+    height: currentSize(),
+    colorDark: fgColor.value,
+    colorLight: bgColor.value,
+    correctLevel: QRCode.CorrectLevel.H
+  });
+  // qrcodejs draws async-ish onto a canvas/img inside qrcodeEl; give it a tick.
+  setTimeout(() => {
+    const canvas = qrcodeEl.querySelector('canvas');
+    if (canvas) {
+      downloadBtn.href = canvas.toDataURL('image/png');
+      downloadBtn.classList.remove('disabled');
+    }
+  }, 60);
+}
+
+function scheduleRender() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(render, 200);
+}
+
+qrText.addEventListener('input', scheduleRender);
+fgColor.addEventListener('input', () => { fgVal.textContent = fgColor.value.toUpperCase(); scheduleRender(); });
+bgColor.addEventListener('input', () => { bgVal.textContent = bgColor.value.toUpperCase(); scheduleRender(); });
+sizeRadios.forEach(r => r.addEventListener('change', render));
+
+render();
+</script>
+
+</body>
+</html>
