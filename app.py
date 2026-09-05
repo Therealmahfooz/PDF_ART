@@ -13,6 +13,7 @@ from functools import wraps
 
 import cv2
 import numpy as np
+import openpyxl
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, abort, send_from_directory, session, redirect, url_for, g, make_response
 from authlib.integrations.flask_client import OAuth
@@ -74,6 +75,8 @@ TOOL_LABELS = {
     '/rotate-pdf.html': 'Rotate PDF',
     '/watermark-pdf.html': 'Watermark PDF',
     '/qr-code-generator.html': 'QR Code Generator',
+    '/text-to-pdf.html': 'Text to PDF',
+    '/excel-to-pdf.html': 'Excel to PDF',
 }
 
 # Comma-separated list of Google account emails allowed to see /admin.
@@ -502,6 +505,112 @@ def resolve_font(doc, page_num, font_label, tmp_files, font_cache=None):
     if font_cache is not None:
         font_cache[cache_key] = result
     return result
+
+
+def _wrap_text_to_lines(text, fontname, fontsize, max_width):
+    """Greedily wraps `text` into lines that fit within max_width for the
+    given font/size, using PyMuPDF's own text-measuring so the wrap matches
+    exactly what will be drawn. Preserves blank lines / paragraph breaks
+    from the original text, and hard-breaks single "words" that are wider
+    than the line on their own (e.g. long URLs or no-space text)."""
+    lines = []
+    for paragraph in text.split('\n'):
+        if not paragraph.strip():
+            lines.append('')
+            continue
+
+        words = paragraph.split(' ')
+        current = ''
+        for word in words:
+            trial = (current + ' ' + word).strip()
+            width = fitz.get_text_length(trial, fontname=fontname, fontsize=fontsize)
+            if width <= max_width or not current:
+                current = trial
+            else:
+                lines.append(current)
+                current = word
+
+            # A single word wider than the whole line (long URL etc.) —
+            # break it character by character so it doesn't just overflow.
+            while fitz.get_text_length(current, fontname=fontname, fontsize=fontsize) > max_width and len(current) > 1:
+                lo, hi = 1, len(current)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if fitz.get_text_length(current[:mid], fontname=fontname, fontsize=fontsize) <= max_width:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                lines.append(current[:lo])
+                current = current[lo:]
+
+        lines.append(current)
+    return lines
+
+
+def _excel_col_widths(ws, max_col, usable_width, min_w=35.0, max_w=170.0):
+    """Works out a per-column pixel width for the PDF table: uses the
+    sheet's own column width if Excel recorded one, otherwise falls back to
+    a sensible default. If the sheet is wider than the page, every column
+    is scaled down proportionally so the whole table still fits on one
+    page width (rather than being cut off)."""
+    raw_widths = []
+    for col_idx in range(1, max_col + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        col_dims = getattr(ws, 'column_dimensions', None)
+        dim = col_dims.get(col_letter) if col_dims else None
+        if dim is not None and dim.width:
+            w = dim.width * 6.2  # rough Excel-width-units -> points conversion
+        else:
+            w = 70.0
+        raw_widths.append(max(min_w, min(w, max_w)))
+
+    total = sum(raw_widths)
+    if total > usable_width and total > 0:
+        scale = usable_width / total
+        raw_widths = [w * scale for w in raw_widths]
+    return raw_widths
+
+
+def _fit_text_to_width(text, fontname, fontsize, max_width):
+    """Truncates `text` with a trailing ellipsis if it's wider than
+    max_width at the given font/size, so long cell contents don't spill
+    into neighbouring cells."""
+    if not text:
+        return ''
+    if fitz.get_text_length(text, fontname=fontname, fontsize=fontsize) <= max_width:
+        return text
+    ellipsis = '\u2026'
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        trial = text[:mid] + ellipsis
+        if fitz.get_text_length(trial, fontname=fontname, fontsize=fontsize) <= max_width:
+            lo = mid
+        else:
+            hi = mid - 1
+    return (text[:lo] + ellipsis) if lo > 0 else ellipsis
+
+
+def _draw_excel_row(page, values, col_widths, x0, y, row_height, fontsize, bold=False):
+    """Draws one table row (a header or a data row) as a strip of bordered
+    cells, each with its text fitted/truncated to the cell's width."""
+    fontname = 'hebo' if bold else 'helv'
+    pad = 4.0
+    x = x0
+    for i, w in enumerate(col_widths):
+        val = values[i] if i < len(values) else ''
+        rect = fitz.Rect(x, y, x + w, y + row_height)
+        if bold:
+            page.draw_rect(rect, color=(0.75, 0.75, 0.75), fill=(0.92, 0.92, 0.92), width=0.5)
+        else:
+            page.draw_rect(rect, color=(0.82, 0.82, 0.82), width=0.5)
+        text = _fit_text_to_width(val, fontname, fontsize, w - pad * 2)
+        if text:
+            page.insert_text(
+                fitz.Point(x + pad, y + row_height - pad - 1),
+                text, fontname=fontname, fontsize=fontsize, color=(0, 0, 0),
+            )
+        x += w
 
 
 @app.route('/')
@@ -1710,6 +1819,184 @@ def watermark_pdf():
 @app.route('/qr-code-generator.html')
 def qr_code_generator_page():
     return render_template('qr_code_generator.html')
+
+
+@app.route('/text-to-pdf.html')
+def text_to_pdf_page():
+    return render_template('text_to_pdf.html')
+
+
+@app.route('/convert-text-to-pdf', methods=['POST'])
+def convert_text_to_pdf():
+    text = request.form.get('text', '')
+    if not text or not text.strip():
+        abort(400, description='Please type or paste some text first.')
+    if len(text) > 300000:
+        abort(400, description='That text is too long to convert in one go — please split it into smaller pieces.')
+
+    page_size = (request.form.get('page_size') or 'a4').lower()
+    page_dims = {
+        'a4': (595.0, 842.0),
+        'letter': (612.0, 792.0),
+    }
+    page_w, page_h = page_dims.get(page_size, page_dims['a4'])
+
+    font_choice = (request.form.get('font') or 'helv').lower()
+    font_map = {
+        'helv': 'helv',      # Helvetica (sans-serif)
+        'times': 'tiro',     # Times Roman (serif)
+        'courier': 'cour',   # Courier (monospace)
+    }
+    fontname = font_map.get(font_choice, 'helv')
+
+    try:
+        fontsize = float(request.form.get('font_size', 12))
+    except (TypeError, ValueError):
+        fontsize = 12.0
+    fontsize = max(8.0, min(fontsize, 28.0))
+
+    margin = 56.0  # ~0.78in, matches a typical printed page margin
+    usable_width = page_w - margin * 2
+    line_height = fontsize * 1.4
+    usable_height = page_h - margin * 2
+    lines_per_page = max(1, int(usable_height // line_height))
+
+    lines = _wrap_text_to_lines(text, fontname, fontsize, usable_width)
+
+    doc = fitz.open()
+    try:
+        for start in range(0, len(lines), lines_per_page):
+            page_lines = lines[start:start + lines_per_page]
+            page = doc.new_page(width=page_w, height=page_h)
+            y = margin + fontsize  # baseline for the first line
+            for line in page_lines:
+                if line:
+                    page.insert_text(
+                        fitz.Point(margin, y),
+                        line,
+                        fontname=fontname,
+                        fontsize=fontsize,
+                        color=(0, 0, 0),
+                    )
+                y += line_height
+
+        if doc.page_count == 0:
+            doc.new_page(width=page_w, height=page_h)
+
+        out_bytes = doc.tobytes(garbage=4, deflate=True)
+    finally:
+        doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Text')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
+
+
+@app.route('/excel-to-pdf.html')
+def excel_to_pdf_page():
+    return render_template('excel_to_pdf.html')
+
+
+@app.route('/convert-excel-to-pdf', methods=['POST'])
+def convert_excel_to_pdf():
+    f = request.files.get('excel')
+    if not f or f.filename == '':
+        abort(400, description='No Excel file was received. Please go back and select a file.')
+
+    filename_lower = f.filename.lower()
+    if not (filename_lower.endswith('.xlsx') or filename_lower.endswith('.xlsm')):
+        abort(400, description='Please upload an Excel file in .xlsx or .xlsm format. (Older .xls files aren\'t supported — open it in Excel or Google Sheets and save as .xlsx first.)')
+
+    orientation = (request.form.get('orientation') or 'landscape').lower()
+    if orientation not in ('portrait', 'landscape'):
+        orientation = 'landscape'
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(f.read()), data_only=True, read_only=True)
+    except Exception:
+        abort(400, description='This file could not be read. It may be corrupted or password-protected.')
+
+    sheets = wb.worksheets
+    if not sheets:
+        abort(400, description='This workbook has no sheets.')
+
+    max_sheets = 15
+    sheets = sheets[:max_sheets]
+
+    if orientation == 'landscape':
+        page_w, page_h = 842.0, 595.0
+    else:
+        page_w, page_h = 595.0, 842.0
+
+    margin = 30.0
+    usable_width = page_w - margin * 2
+    fontsize = 8.0
+    row_height = fontsize * 2.0
+    title_space = 24.0
+    usable_height = page_h - margin * 2 - title_space
+
+    max_rows_per_sheet = 2000
+    max_cols_per_sheet = 60
+
+    doc = fitz.open()
+    try:
+        any_content = False
+        for ws in sheets:
+            max_row = min(ws.max_row or 0, max_rows_per_sheet)
+            max_col = min(ws.max_column or 0, max_cols_per_sheet)
+            if max_row == 0 or max_col == 0:
+                continue
+
+            # read_only worksheets can only be iterated once, so pull
+            # everything we need up front.
+            data = []
+            for row in ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col, values_only=True):
+                data.append(['' if v is None else str(v) for v in row])
+
+            if not data:
+                continue
+            any_content = True
+
+            col_widths = _excel_col_widths(ws, max_col, usable_width)
+            rows_per_page = max(1, int((usable_height - row_height) // row_height))
+
+            header = data[0]
+            body = data[1:]
+            row_chunks = [body[i:i + rows_per_page] for i in range(0, len(body), rows_per_page)] or [[]]
+
+            for chunk_idx, chunk in enumerate(row_chunks):
+                page = doc.new_page(width=page_w, height=page_h)
+                title = ws.title if chunk_idx == 0 else f'{ws.title} (cont.)'
+                page.insert_text(
+                    fitz.Point(margin, margin - 6), title,
+                    fontname='hebo', fontsize=11, color=(0, 0, 0),
+                )
+
+                y = margin + title_space - row_height
+                _draw_excel_row(page, header, col_widths, margin, y, row_height, fontsize, bold=True)
+                y += row_height
+                for row_vals in chunk:
+                    _draw_excel_row(page, row_vals, col_widths, margin, y, row_height, fontsize, bold=False)
+                    y += row_height
+
+        if not any_content:
+            abort(400, description='No data was found in this workbook.')
+
+        out_bytes = doc.tobytes(garbage=4, deflate=True)
+    finally:
+        doc.close()
+
+    output_name = safe_filename(request.form.get('filename'), 'PDF-ART-Excel')
+    return send_file(
+        io.BytesIO(out_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=output_name,
+    )
 
 
 @app.route('/admin')
